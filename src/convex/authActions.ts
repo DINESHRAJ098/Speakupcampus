@@ -176,7 +176,22 @@ export const signIn = mutation({
 
     if (!user) throw new Error("No account found with this email");
 
-    if (!user.password) throw new Error("This account has no password set. Please register again with the same email to set a password.");
+    if (!user.password) {
+      // Account exists but has no password (created via old auth system)
+      // Auto-set password so they can sign in
+      const hashedInput = await hashPassword(args.password);
+      await ctx.db.patch(user._id, {
+        password: hashedInput,
+        isVerified: true,
+      });
+      return {
+        success: true,
+        userId: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role || "student",
+      };
+    }
 
     if (!user.isVerified) throw new Error("Please verify your email before signing in");
 
@@ -188,7 +203,7 @@ export const signIn = mutation({
       userId: user._id,
       name: user.name,
       email: user.email,
-      role: user.role,
+      role: user.role || "student",
     };
   },
 });
