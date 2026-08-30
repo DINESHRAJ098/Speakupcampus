@@ -91,7 +91,19 @@ const schema = defineSchema(
       role: v.optional(roleValidator),
       department: v.optional(v.string()),
       studentId: v.optional(v.string()),
+      password: v.optional(v.string()),
+      isVerified: v.optional(v.boolean()),
     }).index("email", ["email"]),
+
+    pendingUsers: defineTable({
+      name: v.string(),
+      email: v.string(),
+      password: v.string(),
+      otp: v.string(),
+      otpExpiry: v.number(),
+      createdAt: v.number(),
+    }).index("by_email", ["email"]),
+
 
     departments: defineTable({
       name: v.string(),

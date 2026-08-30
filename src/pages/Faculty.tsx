@@ -64,7 +64,7 @@ export default function Faculty() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<FacultyTab>("dashboard");
 
-  const userDepartment = user?.department;
+  const userDepartment = (user as any)?.department;
   const departments = useQuery(api.departments.list);
   const deptName = departments?.find((d) => d._id === userDepartment)?.name || userDepartment;
 

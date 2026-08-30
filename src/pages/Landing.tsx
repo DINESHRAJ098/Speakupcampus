@@ -117,13 +117,13 @@ export default function Landing() {
           </div>
           <div className="flex items-center gap-3">
             <button
-              onClick={() => navigate("/auth")}
+              onClick={() => navigate("/register")}
               className="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
               Sign in
             </button>
             <button
-              onClick={() => navigate("/auth")}
+              onClick={() => navigate("/register")}
               className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90 hover:shadow-lg hover:shadow-primary/20"
             >
               Get Started
@@ -155,7 +155,7 @@ export default function Landing() {
 
             <motion.div variants={fadeInUp} className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
               <button
-                onClick={() => navigate("/auth")}
+                onClick={() => navigate("/register")}
                 className="group flex items-center gap-2 rounded-xl bg-primary px-7 py-3.5 text-base font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:shadow-xl hover:shadow-primary/30 hover:bg-primary/90"
               >
                 File a Grievance
@@ -317,7 +317,7 @@ export default function Landing() {
           <p className="mx-auto mt-4 max-w-xl text-lg text-primary-foreground/80">
             Join the campus community already using SpeakUp Campus to improve life for everyone.
           </p>
-          <button onClick={() => navigate("/auth")} className="mt-8 inline-flex items-center gap-2 rounded-xl bg-background px-8 py-4 text-base font-semibold text-foreground shadow-lg transition-all hover:shadow-xl hover:bg-background/90">
+          <button onClick={() => navigate("/register")} className="mt-8 inline-flex items-center gap-2 rounded-xl bg-background px-8 py-4 text-base font-semibold text-foreground shadow-lg transition-all hover:shadow-xl hover:bg-background/90">
             Start Now <ChevronRight className="size-4" />
           </button>
         </motion.div>
