@@ -136,3 +136,63 @@ export const monthlyReport = query({
     };
   },
 });
+
+/**
+ * Assign a faculty member to a department (admin only)
+ */
+export const assignFacultyDepartment = mutation({
+  args: {
+    userId: v.id("users"),
+    department: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.userId, { department: args.department });
+  },
+});
+
+/**
+ * Get all faculty members with their department assignments
+ */
+export const getFacultyWithDepartments = query({
+  args: {},
+  handler: async (ctx) => {
+    const users = await ctx.db.query("users").collect();
+    return users
+      .filter((u) => u.role === "faculty")
+      .map((u) => ({
+        _id: u._id,
+        name: u.name || "Unnamed",
+        email: u.email || "",
+        department: u.department || "Unassigned",
+      }));
+  },
+});
+
+/**
+ * Promote user to faculty and assign department in one call
+ */
+export const grantFacultyAccess = mutation({
+  args: {
+    userId: v.id("users"),
+    department: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.userId, {
+      role: "faculty",
+      department: args.department,
+    });
+  },
+});
+
+/**
+ * Revoke faculty access (set back to student)
+ */
+export const revokeFacultyAccess = mutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.userId, {
+      role: "student",
+      department: undefined,
+    });
+  },
+});

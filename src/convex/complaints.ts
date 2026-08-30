@@ -265,3 +265,17 @@ export const autoEscalate = mutation({
     return { escalatedCount };
   },
 });
+
+/**
+ * Get ALL complaints for a specific department (for faculty view)
+ */
+export const listAllByDepartment = query({
+  args: { departmentId: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("complaints")
+      .withIndex("by_department", (q) => q.eq("departmentId", args.departmentId))
+      .order("desc")
+      .collect();
+  },
+});
