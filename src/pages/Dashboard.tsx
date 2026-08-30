@@ -97,6 +97,7 @@ export default function Dashboard() {
   const upcomingAppointments = useQuery(api.appointments.upcoming);
   const departments = useQuery(api.departments.list);
   const seedDepartments = useMutation(api.departments.seed);
+  const bootstrapAdmin = useMutation(api.admin.bootstrapAdmin);
 
   useEffect(() => { seedDepartments(); }, [seedDepartments]);
 
@@ -183,6 +184,29 @@ export default function Dashboard() {
       </header>
 
       <div className="mx-auto max-w-7xl px-6 py-8">
+        {/* First-time Admin Setup */}
+        {user?.role !== "admin" && (
+          <div className="mb-6 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Shield className="size-5 text-amber-400" />
+              <div>
+                <p className="text-sm font-medium">First-time Setup</p>
+                <p className="text-xs text-muted-foreground">No admin exists yet. Click below to become the first administrator.</p>
+              </div>
+            </div>
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={async () => {
+              try {
+                await bootstrapAdmin();
+                toast.success("You are now an admin!");
+                window.location.reload();
+              } catch (e: any) {
+                toast.error(e.message || "Failed");
+              }
+            }}>
+              <Shield className="size-3.5" />Become Admin
+            </Button>
+          </div>
+        )}
         {stats && (
           <div className="grid grid-cols-2 gap-4 mb-8 md:grid-cols-4">
             {[

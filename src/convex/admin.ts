@@ -196,3 +196,26 @@ export const revokeFacultyAccess = mutation({
     });
   },
 });
+
+/**
+ * Bootstrap: promote the current user to admin if no admin exists yet.
+ * Safe to call multiple times — only works when 0 admins exist.
+ */
+export const bootstrapAdmin = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const { getAuthUserId } = await import("@convex-dev/auth/server");
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const users = await ctx.db.query("users").collect();
+    const adminCount = users.filter((u) => u.role === "admin").length;
+
+    if (adminCount > 0) {
+      throw new Error("Admin already exists. Contact your administrator.");
+    }
+
+    await ctx.db.patch(userId, { role: "admin" });
+    return { success: true };
+  },
+});
