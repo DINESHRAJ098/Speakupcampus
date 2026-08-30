@@ -117,7 +117,7 @@ export default function Landing() {
           </div>
           <div className="flex items-center gap-3">
             <button
-              onClick={() => navigate("/register")}
+              onClick={() => navigate("/auth")}
               className="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
               Sign in
