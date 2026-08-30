@@ -6,30 +6,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/hooks/use-auth";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useState, useMemo, useEffect } from "react";
 import { toast } from "sonner";
 import {
-  Send, LogOut, FileText, Clock, CheckCircle2, XCircle, AlertCircle,
-  Filter, Plus, BookOpen, Building2, Settings, AlertTriangle, MessageSquare,
-  Loader2, Search, CalendarDays, MessageCircle, ChevronRight, Shield,
-  Wifi, UtensilsCrossed, BedDouble, BookMarked, Upload, X,
+  Send, LogOut, FileText, Clock, CheckCircle2, XCircle, AlertCircle, Filter, Plus,
+  BookOpen, Building2, Settings, AlertTriangle, MessageSquare, Loader2, Search,
+  CalendarDays, MessageCircle, ChevronRight, Shield, Wifi, UtensilsCrossed, BedDouble,
+  BookMarked, Upload, X,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router";
@@ -64,10 +52,9 @@ const STATUS_CONFIG: Record<string, { label: string; icon: typeof Clock; color: 
 };
 
 const URGENCY_KEYWORDS = [
-  "electrical fault", "water leak", "fire hazard", "gas leak",
-  "collapsed", "injury", "accident", "emergency", "flood",
-  "short circuit", "exposed wire", "broken glass", "chemical",
-  "harassment", "assault", "threat", "violence", "ragging",
+  "electrical fault", "water leak", "fire hazard", "gas leak", "collapsed", "injury",
+  "accident", "emergency", "flood", "short circuit", "exposed wire", "broken glass",
+  "chemical", "harassment", "assault", "threat", "violence", "ragging",
 ];
 
 export default function Dashboard() {
@@ -97,7 +84,6 @@ export default function Dashboard() {
   const upcomingAppointments = useQuery(api.appointments.upcoming);
   const departments = useQuery(api.departments.list);
   const seedDepartments = useMutation(api.departments.seed);
-  const bootstrapAdmin = useMutation(api.admin.bootstrapAdmin);
 
   useEffect(() => { seedDepartments(); }, [seedDepartments]);
 
@@ -131,10 +117,7 @@ export default function Dashboard() {
   };
 
   const addAttachment = () => {
-    if (formAttachmentUrl.trim()) {
-      setFormAttachments([...formAttachments, formAttachmentUrl.trim()]);
-      setFormAttachmentUrl("");
-    }
+    if (formAttachmentUrl.trim()) { setFormAttachments([...formAttachments, formAttachmentUrl.trim()]); setFormAttachmentUrl(""); }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -150,9 +133,7 @@ export default function Dashboard() {
         userId: user?._id ?? "", userName: user?.name || user?.email || "Anonymous",
         userRole: (user?.role as any) || "student",
       });
-      toast.success(formIsAnonymous ? "Anonymous complaint submitted!" : "Complaint submitted!", {
-        description: formIsAnonymous ? "Your identity is hidden." : "Your grievance has been registered.",
-      });
+      toast.success(formIsAnonymous ? "Anonymous complaint submitted!" : "Complaint submitted!");
       resetForm(); setShowForm(false);
     } catch { toast.error("Failed to submit complaint."); } finally { setIsSubmitting(false); }
   };
@@ -184,29 +165,6 @@ export default function Dashboard() {
       </header>
 
       <div className="mx-auto max-w-7xl px-6 py-8">
-        {/* First-time Admin Setup */}
-        {user?.role !== "admin" && (
-          <div className="mb-6 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Shield className="size-5 text-amber-400" />
-              <div>
-                <p className="text-sm font-medium">First-time Setup</p>
-                <p className="text-xs text-muted-foreground">No admin exists yet. Click below to become the first administrator.</p>
-              </div>
-            </div>
-            <Button size="sm" variant="outline" className="gap-1.5" onClick={async () => {
-              try {
-                await bootstrapAdmin();
-                toast.success("You are now an admin!");
-                window.location.reload();
-              } catch (e: any) {
-                toast.error(e.message || "Failed");
-              }
-            }}>
-              <Shield className="size-3.5" />Become Admin
-            </Button>
-          </div>
-        )}
         {stats && (
           <div className="grid grid-cols-2 gap-4 mb-8 md:grid-cols-4">
             {[
@@ -250,7 +208,6 @@ export default function Dashboard() {
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="rounded-2xl border border-dashed border-border/60 bg-muted/30 py-16 text-center">
                     <FileText className="mx-auto size-12 text-muted-foreground/40 mb-4" />
                     <p className="text-lg font-medium text-muted-foreground">{userComplaints.length === 0 ? "No complaints yet" : "No complaints match your filters"}</p>
-                    <p className="text-sm text-muted-foreground/70 mt-1">{userComplaints.length === 0 ? "Click \"New Complaint\" to submit your first grievance" : "Try adjusting your search or filters"}</p>
                     {userComplaints.length === 0 && <Button onClick={() => setShowForm(true)} variant="outline" className="mt-4 gap-2"><Plus className="size-4" />Submit First Complaint</Button>}
                   </motion.div>
                 ) : filteredComplaints.map((complaint, i) => {
@@ -261,9 +218,9 @@ export default function Dashboard() {
                       <Card className="border-border/60 cursor-pointer transition-all hover:border-primary/30 hover:shadow-md group" onClick={() => navigate(`/complaint/${complaint._id}`)}>
                         <CardContent className="p-5"><div className="flex items-start justify-between gap-4">
                           <div className="flex-1 min-w-0"><div className="flex items-center gap-2 flex-wrap mb-2">
-                            <Badge variant="secondary" className={`${catInfo.color} border text-xs font-medium`}><catInfo.icon className="size-3 mr-1" />{catInfo.label}</Badge>
+                            <Badge variant="secondary" className={`${catInfo.color} border text-xs font-medium`}>{<catInfo.icon className="size-3 mr-1" />}{catInfo.label}</Badge>
                             <Badge variant="secondary" className={`${priInfo.color} text-xs font-medium`}>{priInfo.label}</Badge>
-                            <Badge variant="secondary" className={`${statusCfg.color} border text-xs font-medium`}><StatusIcon className="size-3 mr-1" />{statusCfg.label}</Badge>
+                            <Badge variant="secondary" className={`${statusCfg.color} border text-xs font-medium`}>{<StatusIcon className="size-3 mr-1" />}{statusCfg.label}</Badge>
                             {complaint.isAnonymous && <Badge variant="secondary" className="bg-slate-500/10 text-slate-400 text-xs">Anonymous</Badge>}
                           </div>
                             <h3 className="font-semibold text-base group-hover:text-primary transition-colors">{complaint.title}</h3>
@@ -300,28 +257,28 @@ export default function Dashboard() {
       {/* Submit Complaint Dialog */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle className="text-xl">Submit a Complaint</DialogTitle><DialogDescription>Fill in the details below. Fields marked with * are required.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle className="text-xl">Submit a Complaint</DialogTitle><DialogDescription>Fields marked with * are required.</DialogDescription></DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-5 mt-4">
             <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/30 p-3">
-              <div className="flex items-center gap-3"><Shield className="size-4 text-muted-foreground" /><div><p className="text-sm font-medium">Submit Anonymously</p><p className="text-xs text-muted-foreground">Your identity will be hidden from administrators</p></div></div>
+              <div className="flex items-center gap-3"><Shield className="size-4 text-muted-foreground" /><div><p className="text-sm font-medium">Submit Anonymously</p><p className="text-xs text-muted-foreground">Your identity will be hidden</p></div></div>
               <Switch checked={formIsAnonymous} onCheckedChange={setFormIsAnonymous} />
             </div>
 
-            <div className="space-y-2"><Label htmlFor="title">Complaint Title <span className="text-destructive">*</span></Label>
-              <Input id="title" placeholder="Brief title describing your grievance" value={formTitle} onChange={(e) => setFormTitle(e.target.value)} required />
-              {autoDetectedPriority && <p className="text-xs text-amber-400 flex items-center gap-1 mt-1"><AlertTriangle className="size-3" />Priority auto-set to <span className="font-semibold capitalize">{autoDetectedPriority}</span> based on urgency keywords</p>}
+            <div className="space-y-2"><Label>Complaint Title <span className="text-destructive">*</span></Label>
+              <Input placeholder="Brief title describing your grievance" value={formTitle} onChange={(e) => setFormTitle(e.target.value)} required />
+              {autoDetectedPriority && <p className="text-xs text-amber-400 flex items-center gap-1 mt-1"><AlertTriangle className="size-3" />Priority auto-set to <span className="font-semibold capitalize">{autoDetectedPriority}</span></p>}
             </div>
 
-            <div className="space-y-2"><Label htmlFor="description">Description <span className="text-destructive">*</span></Label>
-              <Textarea id="description" placeholder="Provide a detailed description of your complaint..." value={formDescription} onChange={(e) => setFormDescription(e.target.value)} rows={4} required /></div>
+            <div className="space-y-2"><Label>Description <span className="text-destructive">*</span></Label>
+              <Textarea placeholder="Detailed description..." value={formDescription} onChange={(e) => setFormDescription(e.target.value)} rows={4} required /></div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2"><Label>Category <span className="text-destructive">*</span></Label>
-                <Select value={formCategory} onValueChange={setFormCategory}><SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+                <Select value={formCategory} onValueChange={setFormCategory}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                   <SelectContent>{Object.entries(CATEGORY_CONFIG).map(([k, v]) => (<SelectItem key={k} value={k}>{v.label}</SelectItem>))}</SelectContent></Select></div>
-              <div className="space-y-2"><Label>Department (optional)</Label>
+              <div className="space-y-2"><Label>Department</Label>
                 <Select value={formDepartment} onValueChange={(val) => { setFormDepartment(val); const dept = departments?.find((d) => d._id === val); setFormDepartmentName(dept?.name || ""); }}>
-                  <SelectTrigger><SelectValue placeholder="Select department" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                   <SelectContent>{(departments || []).map((dept) => (<SelectItem key={dept._id} value={dept._id}>{dept.name}</SelectItem>))}</SelectContent></Select></div>
             </div>
 
@@ -329,7 +286,7 @@ export default function Dashboard() {
               <Select value={formPriority} onValueChange={setFormPriority}><SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>{PRIORITIES.map((pri) => (<SelectItem key={pri.value} value={pri.value}>{pri.label}</SelectItem>))}</SelectContent></Select></div>
 
-            <div className="space-y-2"><Label>Attachments (optional)</Label>
+            <div className="space-y-2"><Label>Attachments</Label>
               <div className="flex gap-2"><Input placeholder="Paste image/document URL" value={formAttachmentUrl} onChange={(e) => setFormAttachmentUrl(e.target.value)} className="flex-1" />
                 <Button type="button" variant="outline" size="icon" onClick={addAttachment}><Upload className="size-4" /></Button></div>
               {formAttachments.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{formAttachments.map((url, i) => (
@@ -342,8 +299,7 @@ export default function Dashboard() {
             <Separator />
             <div className="flex items-center justify-end gap-3">
               <Button type="button" variant="outline" onClick={() => { resetForm(); setShowForm(false); }}>Cancel</Button>
-              <Button type="submit" disabled={isSubmitting} className="gap-2">
-                {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}Submit Complaint</Button>
+              <Button type="submit" disabled={isSubmitting} className="gap-2">{isSubmitting ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}Submit</Button>
             </div>
           </form>
         </DialogContent>
