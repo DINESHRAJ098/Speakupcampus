@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { api } from "./_generated/api";
 
 // Simple SHA-256 hash for passwords (Convex runs on Cloudflare Workers)
 async function hashPassword(password: string): Promise<string> {
@@ -75,7 +76,7 @@ export const register = mutation({
 
     // In production, send OTP via email service (Resend, SendGrid, etc.)
     // For now, log it to console
-    console.log(`[SpeakUp Campus] OTP for ${args.email}: ${otp}`);
+    ctx.scheduler.runAfter(0, api.sendEmail.sendOTPEmail, { to: args.email, otp, purpose: "verification" });
 
     return { success: true, message: `OTP sent to ${args.email}` };
   },
@@ -135,7 +136,7 @@ export const resendOTP = mutation({
 
     await ctx.db.patch(pending._id, { otp: newOTP, otpExpiry: newExpiry });
 
-    console.log(`[SpeakUp Campus] Resent OTP for ${args.email}: ${newOTP}`);
+    ctx.scheduler.runAfter(0, api.sendEmail.sendOTPEmail, { to: args.email, otp: newOTP, purpose: "verification" });
 
     return { success: true, message: `New OTP sent to ${args.email}` };
   },
@@ -217,7 +218,7 @@ export const forgotPassword = mutation({
       createdAt: Date.now(),
     });
 
-    console.log(`[SpeakUp Campus] Password Reset OTP for ${args.email}: ${otp}`);
+    ctx.scheduler.runAfter(0, api.sendEmail.sendOTPEmail, { to: args.email, otp, purpose: "password_reset" });
 
     return { success: true, message: `OTP sent to ${args.email}` };
   },
