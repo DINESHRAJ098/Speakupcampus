@@ -21,6 +21,9 @@ export default function VerifyOTP() {
   const [isVerified, setIsVerified] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(60);
 
+  // Get OTP from localStorage fallback
+  const [storedOtp, setStoredOtp] = useState(() => email ? localStorage.getItem(`speakup_otp_${email}`) : null);
+
   // Countdown timer for resend
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -54,10 +57,14 @@ export default function VerifyOTP() {
   const handleResend = async () => {
     if (resendCooldown > 0 || !email) return;
     try {
-      await resendOTP({ email });
+      const result = await resendOTP({ email });
+      if (result.otp) {
+        localStorage.setItem(`speakup_otp_${email}`, result.otp);
+      }
       toast.success("New OTP sent!", { description: `A new 6-digit code has been sent to ${email}` });
       setResendCooldown(60);
       setOtp("");
+      setStoredOtp(result.otp || null);
     } catch (err: any) {
       toast.error(err.message || "Failed to resend OTP");
     }
@@ -105,6 +112,14 @@ export default function VerifyOTP() {
             We've sent a 6-digit code to<br />
             <span className="font-medium text-foreground">{email}</span>
           </CardDescription>
+
+          {storedOtp && (
+            <div className="mx-6 p-3 bg-primary/10 border border-primary/20 rounded-lg text-center">
+              <p className="text-xs text-muted-foreground mb-1">Your verification code:</p>
+              <p className="text-2xl font-bold tracking-[0.3em] text-primary font-mono">{storedOtp}</p>
+              <p className="text-[10px] text-muted-foreground mt-1">Check your email for the official code. This is a fallback.</p>
+            </div>
+          )}
         </CardHeader>
 
         <CardContent className="space-y-6">

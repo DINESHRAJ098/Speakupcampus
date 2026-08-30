@@ -1,5 +1,6 @@
 import { action } from "./_generated/server";
 import { v } from "convex/values";
+import { Resend } from "resend";
 
 /**
  * Send an OTP email via Resend.
@@ -58,7 +59,6 @@ export const sendOTPEmail = action({
 </html>`;
 
     try {
-      const { Resend } = await import("resend");
       const resend = new Resend(apiKey);
 
       await resend.emails.send({
@@ -70,9 +70,8 @@ export const sendOTPEmail = action({
 
       return { success: true, message: `OTP sent to ${args.to}` };
     } catch (error: any) {
-      console.error("[SpeakUp Campus] Email send failed:", error);
-      console.log(`[SpeakUp Campus] OTP for ${args.to}: ${args.otp}`);
-      return { success: false, message: "Email failed. OTP logged to console." };
+      console.error("[SpeakUp Campus] Email send failed:", error.message || error);
+      return { success: false, message: `Email failed: ${error.message || "unknown error"}` };
     }
   },
 });

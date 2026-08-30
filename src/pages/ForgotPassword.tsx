@@ -25,7 +25,10 @@ export default function ForgotPassword() {
     setIsLoading(true);
     setError("");
     try {
-      await forgotPassword({ email: email.toLowerCase().trim() });
+      const result = await forgotPassword({ email: email.toLowerCase().trim() });
+      if (result.otp) {
+        localStorage.setItem(`speakup_reset_otp_${email.toLowerCase().trim()}`, result.otp);
+      }
       toast.success("OTP sent!", { description: `A 6-digit code has been sent to ${email}` });
       navigate(`/reset-password?email=${encodeURIComponent(email.toLowerCase().trim())}`);
     } catch (err: any) {

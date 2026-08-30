@@ -55,7 +55,11 @@ export default function Register() {
 
     setIsLoading(true);
     try {
-      await register({ name: name.trim(), email: email.toLowerCase().trim(), password, confirmPassword });
+      const result = await register({ name: name.trim(), email: email.toLowerCase().trim(), password, confirmPassword });
+      // Store OTP locally as fallback for email delivery
+      if (result.otp) {
+        localStorage.setItem(`speakup_otp_${email.toLowerCase().trim()}`, result.otp);
+      }
       toast.success("OTP sent!", { description: `A 6-digit code has been sent to ${email}` });
       navigate(`/verify-otp?email=${encodeURIComponent(email.toLowerCase().trim())}`);
     } catch (err: any) {

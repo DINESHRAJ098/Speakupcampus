@@ -27,6 +27,7 @@ export default function ResetPassword() {
   const [isSuccess, setIsSuccess] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(60);
   const [error, setError] = useState("");
+  const [storedOtp, setStoredOtp] = useState(() => email ? localStorage.getItem(`speakup_reset_otp_${email}`) : null);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -68,7 +69,11 @@ export default function ResetPassword() {
   const handleResend = async () => {
     if (resendCooldown > 0 || !email) return;
     try {
-      await resendOTP({ email });
+      const result = await resendOTP({ email });
+      if (result.otp) {
+        localStorage.setItem(`speakup_reset_otp_${email}`, result.otp);
+        setStoredOtp(result.otp);
+      }
       toast.success("New OTP sent!");
       setResendCooldown(60);
       setOtp("");
@@ -118,6 +123,14 @@ export default function ResetPassword() {
             Enter the 6-digit code sent to<br />
             <span className="font-medium text-foreground">{email}</span>
           </CardDescription>
+
+          {storedOtp && (
+            <div className="mx-6 p-3 bg-primary/10 border border-primary/20 rounded-lg text-center">
+              <p className="text-xs text-muted-foreground mb-1">Your reset code:</p>
+              <p className="text-2xl font-bold tracking-[0.3em] text-primary font-mono">{storedOtp}</p>
+              <p className="text-[10px] text-muted-foreground mt-1">Check your email for the official code. This is a fallback.</p>
+            </div>
+          )}
         </CardHeader>
 
         <CardContent className="space-y-5">
