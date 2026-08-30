@@ -19,8 +19,12 @@ export type Role = Infer<typeof roleValidator>;
 
 export const CATEGORIES = {
   ACADEMIC: "academic",
-  FACILITY: "facility",
-  ADMINISTRATION: "administration",
+  HOSTEL: "hostel",
+  MESS: "mess",
+  IT: "it",
+  INFRASTRUCTURE: "infrastructure",
+  LIBRARY: "library",
+  ANTI_RAGGING: "anti_ragging",
   DISCIPLINE: "discipline",
   SAFETY: "safety",
   OTHER: "other",
@@ -28,8 +32,12 @@ export const CATEGORIES = {
 
 export const categoryValidator = v.union(
   v.literal(CATEGORIES.ACADEMIC),
-  v.literal(CATEGORIES.FACILITY),
-  v.literal(CATEGORIES.ADMINISTRATION),
+  v.literal(CATEGORIES.HOSTEL),
+  v.literal(CATEGORIES.MESS),
+  v.literal(CATEGORIES.IT),
+  v.literal(CATEGORIES.INFRASTRUCTURE),
+  v.literal(CATEGORIES.LIBRARY),
+  v.literal(CATEGORIES.ANTI_RAGGING),
   v.literal(CATEGORIES.DISCIPLINE),
   v.literal(CATEGORIES.SAFETY),
   v.literal(CATEGORIES.OTHER),
@@ -53,18 +61,20 @@ export type Priority = Infer<typeof priorityValidator>;
 
 export const STATUSES = {
   PENDING: "pending",
-  IN_REVIEW: "in_review",
+  IN_PROGRESS: "in_progress",
   ASSIGNED: "assigned",
   RESOLVED: "resolved",
   REJECTED: "rejected",
+  ESCALATED: "escalated",
 } as const;
 
 export const statusValidator = v.union(
   v.literal(STATUSES.PENDING),
-  v.literal(STATUSES.IN_REVIEW),
+  v.literal(STATUSES.IN_PROGRESS),
   v.literal(STATUSES.ASSIGNED),
   v.literal(STATUSES.RESOLVED),
   v.literal(STATUSES.REJECTED),
+  v.literal(STATUSES.ESCALATED),
 );
 export type ComplaintStatus = Infer<typeof statusValidator>;
 
@@ -83,6 +93,14 @@ const schema = defineSchema(
       studentId: v.optional(v.string()),
     }).index("email", ["email"]),
 
+    departments: defineTable({
+      name: v.string(),
+      slug: v.string(),
+      headName: v.optional(v.string()),
+      headId: v.optional(v.string()),
+      description: v.optional(v.string()),
+    }).index("by_slug", ["slug"]),
+
     complaints: defineTable({
       title: v.string(),
       description: v.string(),
@@ -92,18 +110,39 @@ const schema = defineSchema(
       userId: v.string(),
       userName: v.string(),
       userRole: roleValidator,
-      department: v.optional(v.string()),
+      isAnonymous: v.optional(v.boolean()),
+      departmentId: v.optional(v.string()),
+      departmentName: v.optional(v.string()),
       assignedTo: v.optional(v.string()),
       assignedToName: v.optional(v.string()),
+      attachmentUrls: v.optional(v.array(v.string())),
+      escalationLevel: v.optional(v.number()),
       createdAt: v.number(),
       updatedAt: v.number(),
+      resolvedAt: v.optional(v.number()),
       resolution: v.optional(v.string()),
     })
       .index("by_user", ["userId"])
       .index("by_status", ["status"])
       .index("by_category", ["category"])
+      .index("by_department", ["departmentId"])
       .index("by_created", ["createdAt"])
       .index("by_assigned", ["assignedTo"]),
+
+    resolution_logs: defineTable({
+      complaintId: v.string(),
+      complaintTitle: v.string(),
+      updatedBy: v.string(),
+      updatedByName: v.string(),
+      updatedByRole: roleValidator,
+      previousStatus: v.optional(v.string()),
+      newStatus: v.string(),
+      comment: v.optional(v.string()),
+      attachmentUrls: v.optional(v.array(v.string())),
+      createdAt: v.number(),
+    })
+      .index("by_complaint", ["complaintId"])
+      .index("by_created", ["createdAt"]),
 
     comments: defineTable({
       complaintId: v.string(),

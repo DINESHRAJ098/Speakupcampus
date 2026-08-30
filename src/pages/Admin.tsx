@@ -61,7 +61,7 @@ const CATEGORIES: Record<string, { label: string; icon: typeof BookOpen; color: 
 
 const STATUS_CONFIG: Record<string, { label: string; icon: typeof Clock; color: string }> = {
   pending: { label: "Pending", icon: Clock, color: "bg-amber-500/10 text-amber-400 border-amber-500/20" },
-  in_review: { label: "In Review", icon: AlertCircle, color: "bg-blue-500/10 text-blue-400 border-blue-500/20" },
+  in_progress: { label: "In Review", icon: AlertCircle, color: "bg-blue-500/10 text-blue-400 border-blue-500/20" },
   assigned: { label: "Assigned", icon: AlertCircle, color: "bg-violet-500/10 text-violet-400 border-violet-500/20" },
   resolved: { label: "Resolved", icon: CheckCircle2, color: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" },
   rejected: { label: "Rejected", icon: XCircle, color: "bg-red-500/10 text-red-400 border-red-500/20" },
