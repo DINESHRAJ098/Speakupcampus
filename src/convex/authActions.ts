@@ -50,7 +50,12 @@ export const register = mutation({
 
     // Check if email already exists in users
     const existingUser = await ctx.db.query("users").withIndex("email", (q) => q.eq("email", args.email.toLowerCase())).first();
-    if (existingUser) throw new Error("An account with this email already exists");
+    if (existingUser) {
+      if (existingUser.password) {
+        throw new Error("An account with this email already exists. Please sign in.");
+      }
+      // Existing account from old auth system (no password) — allow setting password via OTP
+    }
 
     // Check if email is already pending
     const existingPending = await ctx.db.query("pendingUsers").withIndex("by_email", (q) => q.eq("email", args.email.toLowerCase())).first();
@@ -104,15 +109,29 @@ export const verifyOTP = mutation({
       throw new Error("Invalid OTP. Please try again.");
     }
 
-    // Create the user account
-    const userId = await ctx.db.insert("users", {
-      name: pending.name,
-      email: pending.email,
-      password: pending.password,
-      isVerified: true,
-      emailVerificationTime: Date.now(),
-      role: "student",
-    });
+    // Check if user already exists (from old auth system without password)
+    const existingUser = await ctx.db.query("users").withIndex("email", (q) => q.eq("email", pending.email)).first();
+
+    let userId;
+    if (existingUser) {
+      // Update existing user with password and verification
+      await ctx.db.patch(existingUser._id, {
+        password: pending.password,
+        isVerified: true,
+        emailVerificationTime: Date.now(),
+      });
+      userId = existingUser._id;
+    } else {
+      // Create new user account
+      userId = await ctx.db.insert("users", {
+        name: pending.name,
+        email: pending.email,
+        password: pending.password,
+        isVerified: true,
+        emailVerificationTime: Date.now(),
+        role: "student",
+      });
+    }
 
     // Delete the pending registration
     await ctx.db.delete(pending._id);
@@ -157,7 +176,7 @@ export const signIn = mutation({
 
     if (!user) throw new Error("No account found with this email");
 
-    if (!user.password) throw new Error("This account uses a different sign-in method");
+    if (!user.password) throw new Error("This account has no password set. Please register again with the same email to set a password.");
 
     if (!user.isVerified) throw new Error("Please verify your email before signing in");
 
