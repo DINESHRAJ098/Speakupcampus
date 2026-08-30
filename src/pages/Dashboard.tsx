@@ -185,6 +185,12 @@ export default function Dashboard() {
             <span className="font-semibold hidden sm:inline">SpeakUp Campus</span>
           </div>
           <div className="flex items-center gap-2">
+            {(user?.role === "faculty" || user?.role === "admin") && (
+              <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground" onClick={() => navigate("/faculty")}>
+                <FileText className="size-3.5" />
+                Faculty
+              </Button>
+            )}
             {user?.role === "admin" && (
               <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground" onClick={() => navigate("/admin")}>
                 <Settings className="size-3.5" />

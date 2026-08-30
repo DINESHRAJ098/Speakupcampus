@@ -5,12 +5,14 @@ import { Infer, v } from "convex/values";
 export const ROLES = {
   STUDENT: "student",
   STAFF: "staff",
+  FACULTY: "faculty",
   ADMIN: "admin",
 } as const;
 
 export const roleValidator = v.union(
   v.literal(ROLES.STUDENT),
   v.literal(ROLES.STAFF),
+  v.literal(ROLES.FACULTY),
   v.literal(ROLES.ADMIN),
 );
 export type Role = Infer<typeof roleValidator>;
@@ -100,7 +102,8 @@ const schema = defineSchema(
       .index("by_user", ["userId"])
       .index("by_status", ["status"])
       .index("by_category", ["category"])
-      .index("by_created", ["createdAt"]),
+      .index("by_created", ["createdAt"])
+      .index("by_assigned", ["assignedTo"]),
 
     comments: defineTable({
       complaintId: v.string(),

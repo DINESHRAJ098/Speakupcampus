@@ -74,12 +74,15 @@ export default function Admin() {
   const overview = useQuery(api.admin.systemOverview);
   const complaints = useQuery(api.complaints.list);
   const allUsers = useQuery(api.admin.allUsers);
+  const facultyList = useQuery(api.admin.facultyMembers);
 
   const updateStatus = useMutation(api.complaints.updateStatus);
   const assignComplaint = useMutation(api.complaints.assign);
   const resolveComplaint = useMutation(api.complaints.resolve);
   const createAnnouncement = useMutation(api.announcements.create);
   const deleteAnnouncement = useMutation(api.announcements.remove);
+  const promoteToAdmin = useMutation(api.admin.promoteToAdmin);
+  const changeUserRole = useMutation(api.admin.changeUserRole);
   const announcements = useQuery(api.announcements.list);
 
   const [filterStatus, setFilterStatus] = useState("all");
@@ -95,6 +98,8 @@ export default function Admin() {
   const [annTitle, setAnnTitle] = useState("");
   const [annContent, setAnnContent] = useState("");
   const [annPriority, setAnnPriority] = useState("normal");
+
+  const [showUserManagement, setShowUserManagement] = useState(false);
 
   const filteredComplaints = (complaints || []).filter((c) => {
     if (filterStatus !== "all" && c.status !== filterStatus) return false;
@@ -190,6 +195,30 @@ export default function Admin() {
     );
   }
 
+  const handleRoleChange = async (userId: string, newRole: string) => {
+    setIsProcessing(true);
+    try {
+      await changeUserRole({ userId: userId as any, newRole: newRole as any });
+      toast.success("Role updated");
+    } catch {
+      toast.error("Failed to update role");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handlePromoteToAdmin = async (userId: string) => {
+    setIsProcessing(true);
+    try {
+      await promoteToAdmin({ userId: userId as any });
+      toast.success("User promoted to admin");
+    } catch {
+      toast.error("Failed to promote user");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   return (
     <main className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl">
@@ -237,10 +266,15 @@ export default function Admin() {
 
         {/* Action Bar */}
         <div className="flex flex-col gap-4 mb-6 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="text-2xl font-bold tracking-tight">All Complaints</h1>
-          <Button onClick={() => setShowAnnouncementDialog(true)} variant="outline" className="gap-2">
-            <Megaphone className="size-4" />Post Announcement
-          </Button>
+          <h1 className="text-2xl font-bold tracking-tight">Administration</h1>
+          <div className="flex gap-2">
+            <Button onClick={() => setShowUserManagement(true)} variant="outline" className="gap-2">
+              <Users className="size-4" />Manage Users
+            </Button>
+            <Button onClick={() => setShowAnnouncementDialog(true)} variant="outline" className="gap-2">
+              <Megaphone className="size-4" />Post Announcement
+            </Button>
+          </div>
         </div>
 
         {/* Filters */}
@@ -356,10 +390,10 @@ export default function Admin() {
                   <Label className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">Assign To</Label>
                   <div className="flex gap-2">
                     <Select value={assignTo} onValueChange={setAssignTo}>
-                      <SelectTrigger className="flex-1"><SelectValue placeholder="Select staff member" /></SelectTrigger>
+                      <SelectTrigger className="flex-1"><SelectValue placeholder="Select faculty / staff" /></SelectTrigger>
                       <SelectContent>
-                        {(allUsers || []).filter((u) => u.role === "staff" || u.role === "admin").map((u) => (
-                          <SelectItem key={u._id} value={u._id}>{u.name || u.email || "Unknown"}</SelectItem>
+                        {(facultyList || []).map((u) => (
+                          <SelectItem key={u._id} value={u._id}>{u.name || u.email || "Unknown"} ({u.role})</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -394,6 +428,61 @@ export default function Admin() {
           ) : (
             <div className="flex items-center justify-center py-12"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* User Management Dialog */}
+      <Dialog open={showUserManagement} onOpenChange={setShowUserManagement}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl">Manage Users</DialogTitle>
+            <DialogDescription>
+              Change user roles or promote users to administrator.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 mt-4">
+            {(allUsers || []).filter((u) => !u.isAnonymous).map((u) => (
+              <div key={u._id} className="flex items-center justify-between rounded-lg border border-border/60 p-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex size-9 items-center justify-center rounded-full bg-muted text-sm font-bold">
+                    {(u.name || u.email || "?").charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">{u.name || "Unnamed"}</p>
+                    <p className="text-xs text-muted-foreground">{u.email}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={u.role || "student"}
+                    onValueChange={(role) => handleRoleChange(u._id, role)}
+                    disabled={isProcessing}
+                  >
+                    <SelectTrigger className="w-[120px] h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="student">Student</SelectItem>
+                      <SelectItem value="staff">Staff</SelectItem>
+                      <SelectItem value="faculty">Faculty</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {u.role !== "admin" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1 text-xs"
+                      disabled={isProcessing}
+                      onClick={() => handlePromoteToAdmin(u._id)}
+                    >
+                      <Shield className="size-3" />Make Admin
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         </DialogContent>
       </Dialog>
 

@@ -11,7 +11,7 @@ export const submit = mutation({
     department: v.optional(v.string()),
     userId: v.string(),
     userName: v.string(),
-    userRole: v.union(v.literal("student"), v.literal("staff"), v.literal("admin")),
+    userRole: v.union(v.literal("student"), v.literal("staff"), v.literal("faculty"), v.literal("admin")),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -44,6 +44,20 @@ export const listByUser = query({
     return await ctx.db
       .query("complaints")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .order("desc")
+      .collect();
+  },
+});
+
+/**
+ * Get complaints assigned to a specific faculty member
+ */
+export const listByAssigned = query({
+  args: { userId: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("complaints")
+      .withIndex("by_assigned", (q) => q.eq("assignedTo", args.userId))
       .order("desc")
       .collect();
   },
