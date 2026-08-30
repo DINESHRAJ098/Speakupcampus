@@ -2,13 +2,22 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { api } from "./_generated/api";
 
-// Simple SHA-256 hash for passwords (Convex runs on Cloudflare Workers)
+// Simple hash for passwords using Convex's crypto
 async function hashPassword(password: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+  try {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+  } catch (e) {
+    // Fallback: simple djb2 hash if crypto.subtle is unavailable
+    let hash = 5381;
+    for (let i = 0; i < password.length; i++) {
+      hash = ((hash << 5) + hash + password.charCodeAt(i)) & 0xffffffff;
+    }
+    return "simple:" + Math.abs(hash).toString(36);
+  }
 }
 
 function generateOTP(): string {
@@ -170,41 +179,46 @@ export const signIn = mutation({
     password: v.string(),
   },
   handler: async (ctx, args) => {
-    if (!args.email || !args.password) throw new Error("Email and password are required");
+    try {
+      if (!args.email || !args.password) throw new Error("Email and password are required");
 
-    const user = await ctx.db.query("users").withIndex("email", (q) => q.eq("email", args.email.toLowerCase())).first();
+      const email = args.email.toLowerCase().trim();
+      const user = await ctx.db.query("users").withIndex("email", (q) => q.eq("email", email)).first();
 
-    if (!user) throw new Error("No account found with this email");
+      if (!user) throw new Error("No account found with this email. Please register first.");
 
-    if (!user.password) {
-      // Account exists but has no password (created via old auth system)
-      // Auto-set password so they can sign in
+      if (!user.password) {
+        // Account exists but has no password (created via old auth system)
+        // Auto-set password so they can sign in immediately
+        const hashedInput = await hashPassword(args.password);
+        await ctx.db.patch(user._id, {
+          password: hashedInput,
+          isVerified: true,
+        });
+        return {
+          success: true,
+          userId: user._id,
+          name: user.name || "User",
+          email: user.email || email,
+          role: user.role || "student",
+        };
+      }
+
+      if (user.isVerified === false) throw new Error("Please verify your email before signing in.");
+
       const hashedInput = await hashPassword(args.password);
-      await ctx.db.patch(user._id, {
-        password: hashedInput,
-        isVerified: true,
-      });
+      if (hashedInput !== user.password) throw new Error("Invalid email or password.");
+
       return {
         success: true,
         userId: user._id,
-        name: user.name,
-        email: user.email,
+        name: user.name || "User",
+        email: user.email || email,
         role: user.role || "student",
       };
+    } catch (err: any) {
+      throw new Error(err.message || "Sign in failed. Please try again.");
     }
-
-    if (!user.isVerified) throw new Error("Please verify your email before signing in");
-
-    const hashedInput = await hashPassword(args.password);
-    if (hashedInput !== user.password) throw new Error("Invalid email or password");
-
-    return {
-      success: true,
-      userId: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role || "student",
-    };
   },
 });
 
