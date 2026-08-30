@@ -120,15 +120,19 @@ export default function ResetPassword() {
           </div>
           <CardTitle className="text-xl">Reset Password</CardTitle>
           <CardDescription>
-            Enter the 6-digit code sent to<br />
+            Enter the 6-digit reset code for<br />
             <span className="font-medium text-foreground">{email}</span>
           </CardDescription>
 
           {storedOtp && (
-            <div className="mx-6 p-3 bg-primary/10 border border-primary/20 rounded-lg text-center">
-              <p className="text-xs text-muted-foreground mb-1">Your reset code:</p>
-              <p className="text-2xl font-bold tracking-[0.3em] text-primary font-mono">{storedOtp}</p>
-              <p className="text-[10px] text-muted-foreground mt-1">Check your email for the official code. This is a fallback.</p>
+            <div className="mx-6 p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg text-center space-y-2">
+              <p className="text-xs font-medium text-amber-600 dark:text-amber-400">⚠️ Email Delivery Issue</p>
+              <p className="text-[11px] text-muted-foreground">Due to a temporary technical issue, the reset code could not be sent to your email. Please use the code below to reset your password.</p>
+              <div className="py-2">
+                <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Your Reset Code</p>
+                <p className="text-3xl font-bold tracking-[0.4em] text-foreground font-mono">{storedOtp}</p>
+              </div>
+              <p className="text-[10px] text-muted-foreground">This code expires in 10 minutes.</p>
             </div>
           )}
         </CardHeader>
