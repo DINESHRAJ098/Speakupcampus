@@ -2,7 +2,6 @@ import { authTables } from "@convex-dev/auth/server";
 import { defineSchema, defineTable } from "convex/server";
 import { Infer, v } from "convex/values";
 
-// User roles for the college complaint system
 export const ROLES = {
   STUDENT: "student",
   STAFF: "staff",
@@ -16,12 +15,12 @@ export const roleValidator = v.union(
 );
 export type Role = Infer<typeof roleValidator>;
 
-// Complaint categories
 export const CATEGORIES = {
   ACADEMIC: "academic",
   FACILITY: "facility",
   ADMINISTRATION: "administration",
   DISCIPLINE: "discipline",
+  SAFETY: "safety",
   OTHER: "other",
 } as const;
 
@@ -30,11 +29,11 @@ export const categoryValidator = v.union(
   v.literal(CATEGORIES.FACILITY),
   v.literal(CATEGORIES.ADMINISTRATION),
   v.literal(CATEGORIES.DISCIPLINE),
+  v.literal(CATEGORIES.SAFETY),
   v.literal(CATEGORIES.OTHER),
 );
 export type Category = Infer<typeof categoryValidator>;
 
-// Complaint priority levels
 export const PRIORITIES = {
   LOW: "low",
   MEDIUM: "medium",
@@ -50,10 +49,10 @@ export const priorityValidator = v.union(
 );
 export type Priority = Infer<typeof priorityValidator>;
 
-// Complaint status
 export const STATUSES = {
   PENDING: "pending",
   IN_REVIEW: "in_review",
+  ASSIGNED: "assigned",
   RESOLVED: "resolved",
   REJECTED: "rejected",
 } as const;
@@ -61,6 +60,7 @@ export const STATUSES = {
 export const statusValidator = v.union(
   v.literal(STATUSES.PENDING),
   v.literal(STATUSES.IN_REVIEW),
+  v.literal(STATUSES.ASSIGNED),
   v.literal(STATUSES.RESOLVED),
   v.literal(STATUSES.REJECTED),
 );
@@ -68,41 +68,76 @@ export type ComplaintStatus = Infer<typeof statusValidator>;
 
 const schema = defineSchema(
   {
-    // default auth tables using convex auth.
-    ...authTables, // do not remove or modify
+    ...authTables,
 
-    // the users table is the default users table that is brought in by the authTables
     users: defineTable({
-      name: v.optional(v.string()), // name of the user. do not remove
-      image: v.optional(v.string()), // image of the user. do not remove
-      email: v.optional(v.string()), // email of the user. do not remove
-      emailVerificationTime: v.optional(v.number()), // email verification time. do not remove
-      isAnonymous: v.optional(v.boolean()), // is the user anonymous. do not remove
+      name: v.optional(v.string()),
+      image: v.optional(v.string()),
+      email: v.optional(v.string()),
+      emailVerificationTime: v.optional(v.number()),
+      isAnonymous: v.optional(v.boolean()),
+      role: v.optional(roleValidator),
+      department: v.optional(v.string()),
+      studentId: v.optional(v.string()),
+    }).index("email", ["email"]),
 
-      role: v.optional(roleValidator), // role of the user: student or staff
-      department: v.optional(v.string()), // department of the user (student roll number or staff dept)
-      studentId: v.optional(v.string()), // student roll number or staff ID
-    }).index("email", ["email"]), // index for the email. do not remove or modify
-
-    // Complaints table
     complaints: defineTable({
-      title: v.string(), // complaint title
-      description: v.string(), // detailed complaint description
-      category: categoryValidator, // complaint category
-      priority: priorityValidator, // urgency level
-      status: statusValidator, // current status
-      userId: v.string(), // ID of the user who submitted
-      userName: v.string(), // display name of submitter
-      userRole: roleValidator, // role of submitter (student/staff)
-      department: v.optional(v.string()), // department related to complaint
-      createdAt: v.number(), // timestamp
-      updatedAt: v.number(), // last update timestamp
-      resolution: v.optional(v.string()), // resolution notes if resolved
+      title: v.string(),
+      description: v.string(),
+      category: categoryValidator,
+      priority: priorityValidator,
+      status: statusValidator,
+      userId: v.string(),
+      userName: v.string(),
+      userRole: roleValidator,
+      department: v.optional(v.string()),
+      assignedTo: v.optional(v.string()),
+      assignedToName: v.optional(v.string()),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+      resolution: v.optional(v.string()),
     })
       .index("by_user", ["userId"])
       .index("by_status", ["status"])
       .index("by_category", ["category"])
       .index("by_created", ["createdAt"]),
+
+    comments: defineTable({
+      complaintId: v.string(),
+      userId: v.string(),
+      userName: v.string(),
+      userRole: roleValidator,
+      content: v.string(),
+      createdAt: v.number(),
+    })
+      .index("by_complaint", ["complaintId"])
+      .index("by_user", ["userId"]),
+
+    appointments: defineTable({
+      complaintId: v.string(),
+      complaintTitle: v.string(),
+      scheduledBy: v.string(),
+      scheduledByName: v.string(),
+      scheduledFor: v.string(),
+      scheduledTime: v.string(),
+      notes: v.optional(v.string()),
+      createdAt: v.number(),
+    })
+      .index("by_complaint", ["complaintId"])
+      .index("by_user", ["scheduledBy"])
+      .index("by_date", ["scheduledFor"]),
+
+    announcements: defineTable({
+      title: v.string(),
+      content: v.string(),
+      authorId: v.string(),
+      authorName: v.string(),
+      priority: v.union(v.literal("normal"), v.literal("important"), v.literal("urgent")),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    })
+      .index("by_created", ["createdAt"])
+      .index("by_author", ["authorId"]),
   },
   {
     schemaValidation: false,
