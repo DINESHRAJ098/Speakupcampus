@@ -14,6 +14,8 @@ const Landing = lazy(() => import("./pages/Landing.tsx"));
 const AuthPage = lazy(() => import("./pages/Auth.tsx"));
 const Register = lazy(() => import("./pages/Register.tsx"));
 const VerifyOTP = lazy(() => import("./pages/VerifyOTP.tsx"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword.tsx"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword.tsx"));
 const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
 const ComplaintDetail = lazy(() => import("./pages/ComplaintDetail.tsx"));
 const Faculty = lazy(() => import("./pages/Faculty.tsx"));
@@ -131,6 +133,8 @@ createRoot(document.getElementById("root")!).render(
               />
               <Route path="/register" element={<Register />} />
               <Route path="/verify-otp" element={<VerifyOTP />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
               <Route
                 path="/dashboard"
                 element={

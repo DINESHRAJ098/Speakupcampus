@@ -113,6 +113,9 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
             </Button>
 
             <p className="text-sm text-muted-foreground">
+              <button type="button" onClick={() => navigate("/forgot-password")} className="text-primary hover:underline font-medium">Forgot password?</button>
+            </p>
+            <p className="text-sm text-muted-foreground">
               Don't have an account?{" "}
               <button type="button" onClick={() => navigate("/register")} className="text-primary hover:underline font-medium">
                 Create one

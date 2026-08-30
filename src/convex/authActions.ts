@@ -188,3 +188,84 @@ export const getPendingRegistration = query({
     };
   },
 });
+
+/**
+ * Forgot Password: generate OTP for password reset
+ */
+export const forgotPassword = mutation({
+  args: { email: v.string() },
+  handler: async (ctx, args) => {
+    if (!args.email) throw new Error("Email is required");
+
+    const user = await ctx.db.query("users").withIndex("email", (q) => q.eq("email", args.email.toLowerCase())).first();
+    if (!user) throw new Error("No account found with this email");
+    if (!user.isVerified) throw new Error("This account is not verified yet");
+
+    // Check for existing pending reset
+    const existing = await ctx.db.query("pendingUsers").withIndex("by_email", (q) => q.eq("email", args.email.toLowerCase())).first();
+    if (existing) await ctx.db.delete(existing._id);
+
+    const otp = generateOTP();
+    const otpExpiry = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+    await ctx.db.insert("pendingUsers", {
+      name: "password_reset",
+      email: args.email.toLowerCase().trim(),
+      password: "reset",
+      otp,
+      otpExpiry,
+      createdAt: Date.now(),
+    });
+
+    console.log(`[SpeakUp Campus] Password Reset OTP for ${args.email}: ${otp}`);
+
+    return { success: true, message: `OTP sent to ${args.email}` };
+  },
+});
+
+/**
+ * Reset Password: verify OTP and set new password
+ */
+export const resetPassword = mutation({
+  args: {
+    email: v.string(),
+    otp: v.string(),
+    newPassword: v.string(),
+    confirmPassword: v.string(),
+  },
+  handler: async (ctx, args) => {
+    if (!args.email || !args.otp || !args.newPassword || !args.confirmPassword) {
+      throw new Error("All fields are required");
+    }
+    if (args.newPassword !== args.confirmPassword) {
+      throw new Error("Passwords do not match");
+    }
+
+    const strength = isStrongPassword(args.newPassword);
+    if (!strength.valid) throw new Error(strength.message);
+
+    const pending = await ctx.db.query("pendingUsers").withIndex("by_email", (q) => q.eq("email", args.email.toLowerCase())).first();
+    if (!pending) throw new Error("No reset request found. Please request a new OTP.");
+
+    if (Date.now() > pending.otpExpiry) {
+      await ctx.db.delete(pending._id);
+      throw new Error("OTP has expired. Please request a new one.");
+    }
+
+    if (pending.otp !== args.otp) {
+      throw new Error("Invalid OTP. Please try again.");
+    }
+
+    // Find user and update password
+    const user = await ctx.db.query("users").withIndex("email", (q) => q.eq("email", args.email.toLowerCase())).first();
+    if (!user) throw new Error("User not found");
+
+    const hashedPassword = await hashPassword(args.newPassword);
+    await ctx.db.patch(user._id, { password: hashedPassword });
+
+    // Delete the pending reset
+    await ctx.db.delete(pending._id);
+
+    return { success: true, message: "Password reset successful" };
+  },
+});
