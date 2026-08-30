@@ -8,17 +8,19 @@ import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/hooks/use-auth";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router";
 import {
   ArrowLeft, FileText, Clock, CheckCircle2, XCircle, AlertCircle, Settings, Users,
   Loader2, Search, Filter, ChevronRight, Megaphone, BookOpen, Building2, AlertTriangle,
-  MessageSquare, Shield, Check, UserPlus, BarChart3, LayoutDashboard,
-  CalendarDays, TrendingUp, Activity,
+  MessageSquare,
+  MessageCircle, Shield, Check, UserPlus, BarChart3, LayoutDashboard,
+  CalendarDays, TrendingUp, Activity, Repeat, Eye, LogOut,
 } from "lucide-react";
 
 const CATEGORIES: Record<string, { label: string; icon: typeof BookOpen; color: string }> = {
@@ -32,6 +34,8 @@ const CATEGORIES: Record<string, { label: string; icon: typeof BookOpen; color: 
   discipline: { label: "Discipline", icon: AlertTriangle, color: "bg-rose-500/10 text-rose-400 border-rose-500/20" },
   safety: { label: "Safety", icon: AlertCircle, color: "bg-orange-500/10 text-orange-300 border-orange-500/20" },
   other: { label: "Other", icon: MessageSquare, color: "bg-teal-500/10 text-teal-400 border-teal-500/20" },
+
+
 };
 
 const STATUS_CONFIG: Record<string, { label: string; icon: typeof Clock; color: string }> = {
@@ -43,9 +47,18 @@ const STATUS_CONFIG: Record<string, { label: string; icon: typeof Clock; color: 
   escalated: { label: "Escalated", icon: AlertTriangle, color: "bg-red-500/10 text-red-400 border-red-500/20" },
 };
 
+const PRIORITIES: Record<string, { label: string; color: string }> = {
+  low: { label: "Low", color: "bg-slate-500/10 text-slate-400" },
+  medium: { label: "Medium", color: "bg-amber-500/10 text-amber-400" },
+  high: { label: "High", color: "bg-orange-500/10 text-orange-400" },
+  urgent: { label: "Urgent", color: "bg-red-500/10 text-red-400" },
+};
+
 type AdminTab = "overview" | "complaints" | "users" | "faculty" | "departments" | "announcements" | "reports";
 
-const SIDEBAR_ITEMS: { key: AdminTab; label: string; icon: typeof LayoutDashboard }[] = [
+type ViewMode = "admin" | "faculty" | "student";
+
+const ADMIN_SIDEBAR: { key: AdminTab; label: string; icon: typeof LayoutDashboard }[] = [
   { key: "overview", label: "Overview", icon: LayoutDashboard },
   { key: "complaints", label: "Complaints", icon: FileText },
   { key: "users", label: "Users", icon: Users },
@@ -60,6 +73,10 @@ export default function Admin() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<AdminTab>("overview");
 
+  // View mode switching
+  const [viewMode, setViewMode] = useState<ViewMode>("admin");
+  const [impersonateFacultyId, setImpersonateFacultyId] = useState<string>("");
+
   const overview = useQuery(api.admin.systemOverview);
   const complaints = useQuery(api.complaints.list);
   const allUsers = useQuery(api.admin.allUsers);
@@ -67,6 +84,43 @@ export default function Admin() {
   const departments = useQuery(api.departments.list);
   const announcements = useQuery(api.announcements.list);
   const monthlyReport = useQuery(api.admin.monthlyReport);
+
+  // Faculty impersonation data
+  const impersonatedFaculty = useMemo(() => {
+    if (viewMode !== "faculty" || !impersonateFacultyId) return null;
+    return allUsers?.find((u) => u._id === impersonateFacultyId);
+  }, [viewMode, impersonateFacultyId, allUsers]);
+
+  const impersonatedDeptId = impersonatedFaculty?.department;
+  const impersonatedDeptName = departments?.find((d) => d._id === impersonatedDeptId)?.name || impersonatedDeptId;
+
+  const impersonatedDeptComplaints = useQuery(
+    api.complaints.listAllByDepartment,
+    impersonatedDeptId ? { departmentId: impersonatedDeptId } : "skip"
+  );
+
+  const impersonatedAssigned = useQuery(
+    api.complaints.listByAssigned,
+    impersonateFacultyId ? { userId: impersonateFacultyId } : "skip"
+  );
+
+  // Faculty view state
+  const [facSearch, setFacSearch] = useState("");
+  const [facFilterStatus, setFacFilterStatus] = useState("all");
+  const [facFilterCategory, setFacFilterCategory] = useState("all");
+  const [facTab, setFacTab] = useState<"department" | "assigned" | "resolved">("department");
+
+  // Complaint detail
+  const [selectedComplaint, setSelectedComplaint] = useState<string | null>(null);
+  const [resolveText, setResolveText] = useState("");
+  const [assignTo, setAssignTo] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // Comments (for detail dialog)
+  const allComments = useQuery(api.comments.listByComplaint, selectedComplaint ? { complaintId: selectedComplaint } : "skip");
+  const resolutionLogs = useQuery(api.resolutionLogs.listByComplaint, selectedComplaint ? { complaintId: selectedComplaint } : "skip");
+  const [commentText, setCommentText] = useState("");
+  const addComment = useMutation(api.comments.add);
 
   const updateStatus = useMutation(api.complaints.updateStatus);
   const assignComplaint = useMutation(api.complaints.assign);
@@ -78,34 +132,51 @@ export default function Admin() {
   const revokeFacultyAccess = useMutation(api.admin.revokeFacultyAccess);
   const autoEscalate = useMutation(api.complaints.autoEscalate);
 
+  // Admin search/filter
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
-  const [selectedComplaint, setSelectedComplaint] = useState<string | null>(null);
-  const [resolveText, setResolveText] = useState("");
-  const [assignTo, setAssignTo] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
 
-  const [grantDeptUser, setGrantDeptUser] = useState("");
-  const [grantDeptName, setGrantDeptName] = useState("");
+  // Announcement form
   const [annTitle, setAnnTitle] = useState("");
   const [annContent, setAnnContent] = useState("");
   const [annPriority, setAnnPriority] = useState("normal");
 
+  // Grant faculty form
+  const [grantDeptUser, setGrantDeptUser] = useState("");
+  const [grantDeptName, setGrantDeptName] = useState("");
+
+  // Filtered data
   const filteredComplaints = (complaints || []).filter((c) => {
     if (filterStatus !== "all" && c.status !== filterStatus) return false;
     if (filterCategory !== "all" && c.category !== filterCategory) return false;
-    if (searchQuery && !c.title.toLowerCase().includes(searchQuery.toLowerCase()) && !c.description.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    if (searchQuery && !c.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
   });
 
-  const selectedData = complaints?.find((c) => c._id === selectedComplaint);
+  // Faculty impersonation filtered list
+  const facSourceList = useMemo(() => {
+    if (!impersonatedDeptId) return [];
+    if (facTab === "assigned") return impersonatedAssigned || [];
+    if (facTab === "resolved") return (impersonatedDeptComplaints || []).filter((c) => c.status === "resolved" || c.status === "rejected");
+    return impersonatedDeptComplaints || [];
+  }, [facTab, impersonatedDeptComplaints, impersonatedAssigned]);
+
+  const facFiltered = facSourceList.filter((c) => {
+    if (facFilterStatus !== "all" && c.status !== facFilterStatus) return false;
+    if (facFilterCategory !== "all" && c.category !== facFilterCategory) return false;
+    if (facSearch && !c.title.toLowerCase().includes(facSearch.toLowerCase())) return false;
+    return true;
+  });
+
+  const selectedData = (viewMode === "admin" ? complaints : facSourceList)?.find((c) => c._id === selectedComplaint);
+  const complaintComments = allComments || [];
   const formatDate = (ts: number) => new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   const formatMs = (ms: number) => { const h = Math.floor(ms / 3600000); const m = Math.floor((ms % 3600000) / 60000); return h > 0 ? `${h}h ${m}m` : `${m}m`; };
 
   const handleStatusUpdate = async (complaintId: string, status: string) => {
     setIsProcessing(true);
-    try { await updateStatus({ complaintId: complaintId as any, status: status as any }); toast.success("Status updated"); }
+    try { await updateStatus({ complaintId: complaintId as any, status: status as any }); toast.success("Updated"); }
     catch { toast.error("Failed"); } finally { setIsProcessing(false); }
   };
 
@@ -137,7 +208,7 @@ export default function Admin() {
 
   const handleRevokeFaculty = async (userId: string) => {
     setIsProcessing(true);
-    try { await revokeFacultyAccess({ userId: userId as any }); toast.success("Access revoked"); }
+    try { await revokeFacultyAccess({ userId: userId as any }); toast.success("Revoked"); }
     catch { toast.error("Failed"); } finally { setIsProcessing(false); }
   };
 
@@ -157,14 +228,21 @@ export default function Admin() {
 
   const handleAutoEscalate = async () => {
     setIsProcessing(true);
-    try { const result = await autoEscalate(); toast.success(`Escalated ${result.escalatedCount} complaint(s)`); }
+    try { const r = await autoEscalate(); toast.success(`Escalated ${r.escalatedCount} complaint(s)`); }
+    catch { toast.error("Failed"); } finally { setIsProcessing(false); }
+  };
+
+  const handleComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!commentText.trim() || !selectedComplaint) return;
+    setIsProcessing(true);
+    try { await addComment({ complaintId: selectedComplaint, userId: user?._id ?? "", userName: user?.name || "Admin", userRole: "admin", content: commentText.trim() }); setCommentText(""); toast.success("Posted"); }
     catch { toast.error("Failed"); } finally { setIsProcessing(false); }
   };
 
   if (user?.role !== "admin") {
-    return (<main className="min-h-screen bg-background flex items-center justify-center">
-      <div className="text-center"><Shield className="mx-auto size-12 text-muted-foreground/40 mb-4" /><h2 className="text-xl font-bold">Access Denied</h2>
-        <Button variant="outline" className="mt-4" onClick={() => navigate("/dashboard")}>Back to Dashboard</Button></div></main>);
+    return (<main className="min-h-screen bg-background flex items-center justify-center"><div className="text-center"><Shield className="mx-auto size-12 text-muted-foreground/40 mb-4" /><h2 className="text-xl font-bold">Access Denied</h2>
+      <Button variant="outline" className="mt-4" onClick={() => navigate("/dashboard")}>Back to Dashboard</Button></div></main>);
   }
 
   return (
@@ -174,11 +252,13 @@ export default function Admin() {
         <div className="p-4 border-b border-border/60">
           <div className="flex items-center gap-3">
             <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-bold">S</div>
-            <div><p className="font-semibold text-sm">SpeakUp Campus</p><p className="text-[10px] text-muted-foreground">Admin Panel</p></div>
+            <div><p className="font-semibold text-sm">SpeakUp Campus</p>
+              <p className="text-[10px] text-muted-foreground">{viewMode === "admin" ? "Admin Panel" : viewMode === "faculty" ? `Faculty: ${impersonatedFaculty?.name || "Select"}` : "Student View"}</p></div>
           </div>
         </div>
+
         <ScrollArea className="flex-1 py-2">
-          {SIDEBAR_ITEMS.map((item) => (
+          {viewMode === "admin" && ADMIN_SIDEBAR.map((item) => (
             <button key={item.key} onClick={() => setActiveTab(item.key)}
               className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${activeTab === item.key ? "bg-primary/10 text-primary font-medium border-r-2 border-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"}`}>
               <item.icon className="size-4" />{item.label}
@@ -186,7 +266,27 @@ export default function Admin() {
               {item.key === "users" && allUsers && <Badge variant="secondary" className="ml-auto text-[10px]">{allUsers.length}</Badge>}
             </button>
           ))}
+          {viewMode === "faculty" && (
+            <>
+              {(["department", "assigned", "resolved"] as const).map((tab) => (
+                <button key={tab} onClick={() => setFacTab(tab)}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${facTab === tab ? "bg-primary/10 text-primary font-medium border-r-2 border-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"}`}>
+                  {tab === "department" && <><Building2 className="size-4" />Department</>}
+                  {tab === "assigned" && <><FileText className="size-4" />My Assignments</>}
+                  {tab === "resolved" && <><CheckCircle2 className="size-4" />Resolved</>}
+                </button>
+              ))}
+            </>
+          )}
+          {viewMode === "student" && (
+            <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+              <Eye className="size-8 mx-auto mb-3 opacity-50" />
+              <p>Student Dashboard View</p>
+              <p className="text-xs mt-1">This is how students see their complaints</p>
+            </div>
+          )}
         </ScrollArea>
+
         <div className="p-4 border-t border-border/60">
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted-foreground truncate">{user?.name || user?.email}</span>
@@ -200,249 +300,323 @@ export default function Admin() {
 
       {/* Main Content */}
       <main className="flex-1 ml-64">
+        {/* Header with View Switcher */}
         <header className="sticky top-0 z-30 border-b border-border/60 bg-background/80 backdrop-blur-xl px-6 py-3">
-          <h1 className="text-lg font-semibold">{SIDEBAR_ITEMS.find((i) => i.key === activeTab)?.label}</h1>
-        </header>
+          <div className="flex items-center justify-between">
+            <h1 className="text-lg font-semibold">
+              {viewMode === "admin" ? ADMIN_SIDEBAR.find((i) => i.key === activeTab)?.label :
+               viewMode === "faculty" ? `${impersonatedDeptName || "Department"} — ${facTab === "department" ? "All Complaints" : facTab === "assigned" ? "My Assignments" : "Resolved"}` :
+               "Student Dashboard"}
+            </h1>
 
-        <div className="p-6">
-          {/* OVERVIEW */}
-          {activeTab === "overview" && overview && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-                {[
-                  { label: "Total Users", value: overview.totalUsers, icon: Users, color: "text-primary" },
-                  { label: "Complaints", value: overview.totalComplaints, icon: FileText, color: "text-blue-400" },
-                  { label: "Pending", value: overview.pendingComplaints, icon: Clock, color: "text-amber-400" },
-                  { label: "Resolved", value: overview.resolvedComplaints, icon: CheckCircle2, color: "text-emerald-400" },
-                ].map((s) => (<Card key={s.label} className="border-border/60"><CardContent className="p-4">
-                  <div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">{s.label}</p><p className="text-2xl font-bold mt-1">{s.value}</p></div>
-                    <div className={`flex size-10 items-center justify-center rounded-lg bg-muted ${s.color}`}><s.icon className="size-5" /></div></div>
-                </CardContent></Card>))}
-              </div>
+            {/* View Mode Switcher */}
+            <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/30 p-1">
+              <button
+                onClick={() => { setViewMode("admin"); setActiveTab("overview"); }}
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === "admin" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <Shield className="size-3" />Admin
+              </button>
+              <button
+                onClick={() => { setViewMode("faculty"); setFacTab("department"); }}
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === "faculty" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <Building2 className="size-3" />Faculty
+              </button>
+              <button
+                onClick={() => setViewMode("student")}
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === "student" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <Users className="size-3" />Student
+              </button>
+            </div>
+          </div>
 
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-                {[
-                  { label: "In Progress", value: overview.inProgressComplaints, icon: Activity, color: "text-blue-400" },
-                  { label: "Escalated", value: overview.escalatedComplaints, icon: AlertTriangle, color: "text-red-400" },
-                  { label: "Faculty", value: overview.faculty, icon: Shield, color: "text-amber-400" },
-                  { label: "Departments", value: overview.totalDepartments, icon: Building2, color: "text-purple-400" },
-                ].map((s) => (<Card key={s.label} className="border-border/60"><CardContent className="p-4">
-                  <div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">{s.label}</p><p className="text-2xl font-bold mt-1">{s.value}</p></div>
-                    <div className={`flex size-10 items-center justify-center rounded-lg bg-muted ${s.color}`}><s.icon className="size-5" /></div></div>
-                </CardContent></Card>))}
-              </div>
-
-              {/* Department Breakdown */}
-              {overview.departmentStats && overview.departmentStats.length > 0 && (
-                <Card className="border-border/60"><CardHeader><CardTitle className="text-sm font-semibold">Department Breakdown</CardTitle></CardHeader>
-                  <CardContent><div className="space-y-3">{overview.departmentStats.map((d) => (
-                    <div key={d.departmentId} className="flex items-center justify-between rounded-lg border border-border/60 p-3">
-                      <div className="flex items-center gap-3"><Building2 className="size-4 text-muted-foreground" /><span className="text-sm font-medium">{d.departmentName}</span></div>
-                      <div className="flex items-center gap-4 text-xs">
-                        <span className="text-muted-foreground">{d.total} total</span>
-                        <span className="text-amber-400">{d.pending} open</span>
-                        <span className="text-emerald-400">{d.resolved} resolved</span>
-                      </div>
-                    </div>))}</div></CardContent></Card>
-              )}
-
-              {overview.avgResolutionTimeMs > 0 && (
-                <Card className="border-border/60"><CardContent className="p-4 flex items-center gap-4">
-                  <TrendingUp className="size-5 text-primary" /><div><p className="text-sm text-muted-foreground">Average Resolution Time</p><p className="text-xl font-bold">{formatMs(overview.avgResolutionTimeMs)}</p></div>
-                </CardContent></Card>
+          {/* Faculty Selector (when in faculty view) */}
+          {viewMode === "faculty" && (
+            <div className="mt-2 flex items-center gap-3">
+              <Repeat className="size-3.5 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">Viewing as:</span>
+              <Select value={impersonateFacultyId} onValueChange={setImpersonateFacultyId}>
+                <SelectTrigger className="w-[250px] h-8 text-xs"><SelectValue placeholder="Select faculty member to impersonate" /></SelectTrigger>
+                <SelectContent>
+                  {(facultyList || []).map((f) => (
+                    <SelectItem key={f._id} value={f._id}>
+                      {f.name} — {departments?.find((d) => d._id === f.department)?.name || "No dept"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {impersonatedFaculty && (
+                <Badge variant="secondary" className="bg-amber-500/10 text-amber-400 text-[10px]">
+                  <Building2 className="size-2.5 mr-1" />{impersonatedDeptName}
+                </Badge>
               )}
             </div>
           )}
+        </header>
 
-          {/* COMPLAINTS */}
-          {activeTab === "complaints" && (
-            <div className="space-y-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <div className="relative flex-1 max-w-sm"><Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                  <Input placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" /></div>
-                <div className="flex items-center gap-2">
-                  <Select value={filterStatus} onValueChange={setFilterStatus}><SelectTrigger className="w-[130px]"><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="all">All Status</SelectItem>{Object.entries(STATUS_CONFIG).map(([k, v]) => (<SelectItem key={k} value={k}>{v.label}</SelectItem>))}</SelectContent></Select>
-                  <Select value={filterCategory} onValueChange={setFilterCategory}><SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="all">All Categories</SelectItem>{Object.entries(CATEGORIES).map(([k, v]) => (<SelectItem key={k} value={k}>{v.label}</SelectItem>))}</SelectContent></Select>
+        <div className="p-6">
+          {/* ==================== ADMIN VIEW ==================== */}
+          {viewMode === "admin" && (
+            <>
+              {/* OVERVIEW */}
+              {activeTab === "overview" && overview && (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                    {[
+                      { label: "Total Users", value: overview.totalUsers, icon: Users, color: "text-primary" },
+                      { label: "Complaints", value: overview.totalComplaints, icon: FileText, color: "text-blue-400" },
+                      { label: "Pending", value: overview.pendingComplaints, icon: Clock, color: "text-amber-400" },
+                      { label: "Resolved", value: overview.resolvedComplaints, icon: CheckCircle2, color: "text-emerald-400" },
+                    ].map((s) => (<Card key={s.label} className="border-border/60"><CardContent className="p-4">
+                      <div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">{s.label}</p><p className="text-2xl font-bold mt-1">{s.value}</p></div>
+                        <div className={`flex size-10 items-center justify-center rounded-lg bg-muted ${s.color}`}><s.icon className="size-5" /></div></div>
+                    </CardContent></Card>))}
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                    {[
+                      { label: "In Progress", value: overview.inProgressComplaints, icon: Activity, color: "text-blue-400" },
+                      { label: "Escalated", value: overview.escalatedComplaints, icon: AlertTriangle, color: "text-red-400" },
+                      { label: "Faculty", value: overview.faculty, icon: Shield, color: "text-amber-400" },
+                      { label: "Departments", value: overview.totalDepartments, icon: Building2, color: "text-purple-400" },
+                    ].map((s) => (<Card key={s.label} className="border-border/60"><CardContent className="p-4">
+                      <div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">{s.label}</p><p className="text-2xl font-bold mt-1">{s.value}</p></div>
+                        <div className={`flex size-10 items-center justify-center rounded-lg bg-muted ${s.color}`}><s.icon className="size-5" /></div></div>
+                    </CardContent></Card>))}
+                  </div>
+                  {overview.departmentStats && overview.departmentStats.length > 0 && (
+                    <Card className="border-border/60"><CardHeader><CardTitle className="text-sm font-semibold">Department Breakdown</CardTitle></CardHeader>
+                      <CardContent><div className="space-y-2">{overview.departmentStats.map((d) => (
+                        <div key={d.departmentId} className="flex items-center justify-between rounded-lg border border-border/60 p-3">
+                          <span className="text-sm font-medium">{d.departmentName}</span>
+                          <div className="flex items-center gap-4 text-xs"><span className="text-muted-foreground">{d.total} total</span><span className="text-amber-400">{d.pending} open</span><span className="text-emerald-400">{d.resolved} resolved</span></div>
+                        </div>))}</div></CardContent></Card>
+                  )}
                 </div>
-              </div>
+              )}
 
-              <div className="space-y-2">
-                {filteredComplaints.map((c) => {
-                  const cat = CATEGORIES[c.category] || CATEGORIES.other;
-                  const st = STATUS_CONFIG[c.status] || STATUS_CONFIG.pending;
-                  return (
-                    <Card key={c._id} className="border-border/60 cursor-pointer hover:border-primary/30 transition-all" onClick={() => setSelectedComplaint(c._id)}>
-                      <CardContent className="p-4"><div className="flex items-center justify-between gap-3">
-                        <div className="flex-1 min-w-0"><div className="flex items-center gap-2 flex-wrap mb-1">
+              {/* COMPLAINTS */}
+              {activeTab === "complaints" && (
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                    <div className="relative flex-1 max-w-sm"><Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                      <Input placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" /></div>
+                    <div className="flex items-center gap-2">
+                      <Select value={filterStatus} onValueChange={setFilterStatus}><SelectTrigger className="w-[130px]"><SelectValue /></SelectTrigger>
+                        <SelectContent><SelectItem value="all">All Status</SelectItem>{Object.entries(STATUS_CONFIG).map(([k, v]) => (<SelectItem key={k} value={k}>{v.label}</SelectItem>))}</SelectContent></Select>
+                      <Select value={filterCategory} onValueChange={setFilterCategory}><SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
+                        <SelectContent><SelectItem value="all">All Categories</SelectItem>{Object.entries(CATEGORIES).map(([k, v]) => (<SelectItem key={k} value={k}>{v.label}</SelectItem>))}</SelectContent></Select>
+                    </div>
+                  </div>
+                  <div className="space-y-2">{filteredComplaints.map((c) => {
+                    const cat = CATEGORIES[c.category] || CATEGORIES.other; const st = STATUS_CONFIG[c.status] || STATUS_CONFIG.pending;
+                    return (<Card key={c._id} className="border-border/60 cursor-pointer hover:border-primary/30 transition-all" onClick={() => setSelectedComplaint(c._id)}>
+                      <CardContent className="p-4"><div className="flex items-center justify-between gap-3"><div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
                           <Badge variant="secondary" className={`${cat.color} border text-[10px]`}>{<cat.icon className="size-2.5 mr-1" />}{cat.label}</Badge>
                           <Badge variant="secondary" className={`${st.color} border text-[10px]`}>{<st.icon className="size-2.5 mr-1" />}{st.label}</Badge>
                           {c.assignedToName && <Badge variant="secondary" className="text-[10px]">→ {c.assignedToName}</Badge>}
                           {c.isAnonymous && <Badge variant="secondary" className="bg-slate-500/10 text-slate-400 text-[10px]">Anon</Badge>}
-                        </div>
-                          <p className="text-sm font-medium truncate">{c.title}</p>
-                          <p className="text-xs text-muted-foreground">{c.userName} · {formatDate(c.createdAt)}</p>
-                        </div>
-                        <ChevronRight className="size-4 text-muted-foreground/50 shrink-0" />
-                      </div></CardContent>
-                    </Card>);
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* USERS */}
-          {activeTab === "users" && (
-            <div className="space-y-3">
-              {(allUsers || []).filter((u) => !u.isAnonymous).map((u) => (
-                <div key={u._id} className="flex items-center justify-between rounded-lg border border-border/60 p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex size-9 items-center justify-center rounded-full bg-muted text-sm font-bold">{(u.name || u.email || "?").charAt(0).toUpperCase()}</div>
-                    <div><p className="text-sm font-medium">{u.name || "Unnamed"}</p><p className="text-xs text-muted-foreground">{u.email}</p></div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {u.department && <Badge variant="secondary" className="text-[10px]"><Building2 className="size-2.5 mr-1" />{u.department}</Badge>}
-                    <Select value={u.role || "student"} onValueChange={(role) => handleRoleChange(u._id, role)} disabled={isProcessing}>
-                      <SelectTrigger className="w-[110px] h-8 text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent><SelectItem value="student">Student</SelectItem><SelectItem value="staff">Staff</SelectItem><SelectItem value="faculty">Faculty</SelectItem><SelectItem value="admin">Admin</SelectItem></SelectContent>
-                    </Select>
-                  </div>
+                        </div><p className="text-sm font-medium truncate">{c.title}</p>
+                        <p className="text-xs text-muted-foreground">{c.userName} · {formatDate(c.createdAt)}</p>
+                      </div><ChevronRight className="size-4 text-muted-foreground/50 shrink-0" /></div></CardContent></Card>);
+                  })}</div>
                 </div>
-              ))}
-            </div>
-          )}
+              )}
 
-          {/* FACULTY ACCESS */}
-          {activeTab === "faculty" && (
-            <div className="space-y-6">
-              <Card className="border-border/60"><CardHeader><CardTitle className="text-sm font-semibold flex items-center gap-2"><Check className="size-4 text-emerald-400" />Grant Faculty Access</CardTitle></CardHeader>
-                <CardContent>
-                  <p className="text-xs text-muted-foreground mb-3">Promote a user to Faculty and assign them to a department.</p>
-                  <div className="flex gap-2">
-                    <Select value={grantDeptUser} onValueChange={setGrantDeptUser}><SelectTrigger className="flex-1"><SelectValue placeholder="Select user" /></SelectTrigger>
-                      <SelectContent>{(allUsers || []).filter((u) => u.role !== "faculty" && u.role !== "admin" && !u.isAnonymous).map((u) => (
-                        <SelectItem key={u._id} value={u._id}>{u.name || u.email} ({u.role})</SelectItem>))}</SelectContent></Select>
-                    <Select value={grantDeptName} onValueChange={setGrantDeptName}><SelectTrigger className="flex-1"><SelectValue placeholder="Select department" /></SelectTrigger>
-                      <SelectContent>{(departments || []).map((d) => (<SelectItem key={d._id} value={d.name}>{d.name}</SelectItem>))}</SelectContent></Select>
-                    <Button disabled={!grantDeptUser || !grantDeptName || isProcessing} onClick={handleGrantFaculty} className="gap-1.5"><Check className="size-3.5" />Grant</Button>
-                  </div>
-                </CardContent></Card>
-
-              <Card className="border-border/60"><CardHeader><CardTitle className="text-sm font-semibold flex items-center gap-2"><Building2 className="size-4 text-primary" />Current Faculty ({facultyList?.length || 0})</CardTitle></CardHeader>
-                <CardContent>{facultyList && facultyList.length > 0 ? <div className="space-y-2">{facultyList.map((f) => {
-                  const dept = departments?.find((d) => d._id === f.department);
-                  return (<div key={f._id} className="flex items-center justify-between rounded-lg border border-border/60 p-3">
+              {/* USERS */}
+              {activeTab === "users" && (
+                <div className="space-y-2">{(allUsers || []).filter((u) => !u.isAnonymous).map((u) => (
+                  <div key={u._id} className="flex items-center justify-between rounded-lg border border-border/60 p-4">
                     <div className="flex items-center gap-3">
-                      <div className="flex size-8 items-center justify-center rounded-full bg-muted text-xs font-bold">{f.name.charAt(0).toUpperCase()}</div>
-                      <div><p className="text-sm font-medium">{f.name}</p><p className="text-xs text-muted-foreground">{f.email}</p></div></div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className="bg-amber-500/10 text-amber-400 text-xs">{<Building2 className="size-3 mr-1" />}{dept?.name || "Unassigned"}</Badge>
-                      <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive text-xs" disabled={isProcessing} onClick={() => handleRevokeFaculty(f._id)}>Revoke</Button>
-                    </div></div>);
-                })}</div> : <p className="text-sm text-muted-foreground text-center py-4">No faculty members yet.</p>}</CardContent></Card>
-            </div>
-          )}
-
-          {/* DEPARTMENTS */}
-          {activeTab === "departments" && (
-            <div className="space-y-4">
-              {(departments || []).map((dept) => {
-                const deptComplaints = (complaints || []).filter((c) => c.departmentId === dept._id);
-                const open = deptComplaints.filter((c) => c.status !== "resolved" && c.status !== "rejected").length;
-                const resolved = deptComplaints.filter((c) => c.status === "resolved").length;
-                return (
-                  <Card key={dept._id} className="border-border/60"><CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3"><Building2 className="size-5 text-primary" /><div><p className="font-medium">{dept.name}</p><p className="text-xs text-muted-foreground">{dept.description}</p></div></div>
-                      <div className="flex items-center gap-4 text-xs">
-                        <span className="text-muted-foreground">{deptComplaints.length} total</span>
-                        <span className="text-amber-400">{open} open</span>
-                        <span className="text-emerald-400">{resolved} resolved</span>
-                      </div></div>
-                  </CardContent></Card>);
-              })}
-            </div>
-          )}
-
-          {/* ANNOUNCEMENTS */}
-          {activeTab === "announcements" && (
-            <div className="space-y-4">
-              <form onSubmit={handleAnnouncement} className="rounded-lg border border-border/60 p-4 space-y-3">
-                <h4 className="text-sm font-semibold">New Announcement</h4>
-                <Input placeholder="Title" value={annTitle} onChange={(e) => setAnnTitle(e.target.value)} required />
-                <Textarea placeholder="Content..." value={annContent} onChange={(e) => setAnnContent(e.target.value)} rows={3} required />
-                <div className="flex items-center gap-3">
-                  <Select value={annPriority} onValueChange={setAnnPriority}><SelectTrigger className="w-[130px]"><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="normal">Normal</SelectItem><SelectItem value="important">Important</SelectItem><SelectItem value="urgent">Urgent</SelectItem></SelectContent></Select>
-                  <Button type="submit" size="sm" disabled={!annTitle || !annContent || isProcessing} className="gap-1.5"><Megaphone className="size-3.5" />Post</Button>
-                </div>
-              </form>
-              <Separator />
-              <div className="space-y-2">
-                {(announcements || []).map((ann) => (
-                  <div key={ann._id} className={`rounded-lg border p-4 ${ann.priority === "urgent" ? "border-red-500/30 bg-red-500/5" : ann.priority === "important" ? "border-amber-500/30 bg-amber-500/5" : "border-border/60"}`}>
-                    <div className="flex items-center justify-between">
-                      <div><p className="text-sm font-medium">{ann.title}</p><p className="text-xs text-muted-foreground mt-1">{ann.content}</p></div>
-                      <Button size="sm" variant="ghost" className="text-destructive text-xs" onClick={async () => { await deleteAnnouncement({ announcementId: ann._id }); toast.success("Deleted"); }}>Delete</Button>
+                      <div className="flex size-9 items-center justify-center rounded-full bg-muted text-sm font-bold">{(u.name || u.email || "?").charAt(0).toUpperCase()}</div>
+                      <div><p className="text-sm font-medium">{u.name || "Unnamed"}</p><p className="text-xs text-muted-foreground">{u.email}</p></div>
                     </div>
-                    <p className="text-[10px] text-muted-foreground mt-2">{formatDate(ann.createdAt)} · {ann.authorName} · {ann.priority}</p>
-                  </div>))}
-              </div>
+                    <div className="flex items-center gap-2">
+                      {u.department && <Badge variant="secondary" className="text-[10px]"><Building2 className="size-2.5 mr-1" />{u.department}</Badge>}
+                      <Select value={u.role || "student"} onValueChange={(r) => handleRoleChange(u._id, r)} disabled={isProcessing}>
+                        <SelectTrigger className="w-[110px] h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent><SelectItem value="student">Student</SelectItem><SelectItem value="staff">Staff</SelectItem><SelectItem value="faculty">Faculty</SelectItem><SelectItem value="admin">Admin</SelectItem></SelectContent>
+                      </Select>
+                    </div></div>
+                ))}</div>
+              )}
+
+              {/* FACULTY ACCESS */}
+              {activeTab === "faculty" && (
+                <div className="space-y-6">
+                  <Card className="border-border/60"><CardHeader><CardTitle className="text-sm font-semibold flex items-center gap-2"><Check className="size-4 text-emerald-400" />Grant Faculty Access</CardTitle></CardHeader>
+                    <CardContent><p className="text-xs text-muted-foreground mb-3">Promote a user to Faculty and assign them to a department.</p>
+                      <div className="flex gap-2">
+                        <Select value={grantDeptUser} onValueChange={setGrantDeptUser}><SelectTrigger className="flex-1"><SelectValue placeholder="Select user" /></SelectTrigger>
+                          <SelectContent>{(allUsers || []).filter((u) => u.role !== "faculty" && u.role !== "admin" && !u.isAnonymous).map((u) => (<SelectItem key={u._id} value={u._id}>{u.name || u.email} ({u.role})</SelectItem>))}</SelectContent></Select>
+                        <Select value={grantDeptName} onValueChange={setGrantDeptName}><SelectTrigger className="flex-1"><SelectValue placeholder="Select department" /></SelectTrigger>
+                          <SelectContent>{(departments || []).map((d) => (<SelectItem key={d._id} value={d.name}>{d.name}</SelectItem>))}</SelectContent></Select>
+                        <Button disabled={!grantDeptUser || !grantDeptName || isProcessing} onClick={handleGrantFaculty} className="gap-1.5"><Check className="size-3.5" />Grant</Button>
+                      </div></CardContent></Card>
+                  <Card className="border-border/60"><CardHeader><CardTitle className="text-sm font-semibold">Current Faculty ({facultyList?.length || 0})</CardTitle></CardHeader>
+                    <CardContent>{facultyList && facultyList.length > 0 ? <div className="space-y-2">{facultyList.map((f) => {
+                      const dept = departments?.find((d) => d._id === f.department);
+                      return (<div key={f._id} className="flex items-center justify-between rounded-lg border border-border/60 p-3">
+                        <div className="flex items-center gap-3"><div className="flex size-8 items-center justify-center rounded-full bg-muted text-xs font-bold">{f.name.charAt(0).toUpperCase()}</div>
+                          <div><p className="text-sm font-medium">{f.name}</p><p className="text-xs text-muted-foreground">{f.email}</p></div></div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary" className="bg-amber-500/10 text-amber-400 text-xs">{<Building2 className="size-3 mr-1" />}{dept?.name || "Unassigned"}</Badge>
+                          <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive text-xs" disabled={isProcessing} onClick={() => handleRevokeFaculty(f._id)}>Revoke</Button>
+                        </div></div>);
+                    })}</div> : <p className="text-sm text-muted-foreground text-center py-4">No faculty members yet.</p>}</CardContent></Card>
+                </div>
+              )}
+
+              {/* DEPARTMENTS */}
+              {activeTab === "departments" && (
+                <div className="space-y-3">{(departments || []).map((dept) => {
+                  const dc = (complaints || []).filter((c) => c.departmentId === dept._id);
+                  return (<Card key={dept._id} className="border-border/60"><CardContent className="p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3"><Building2 className="size-5 text-primary" /><div><p className="font-medium">{dept.name}</p><p className="text-xs text-muted-foreground">{dept.description}</p></div></div>
+                    <div className="flex items-center gap-4 text-xs"><span className="text-muted-foreground">{dc.length} total</span><span className="text-amber-400">{dc.filter((c) => c.status !== "resolved").length} open</span><span className="text-emerald-400">{dc.filter((c) => c.status === "resolved").length} resolved</span></div>
+                  </CardContent></Card>);
+                })}</div>
+              )}
+
+              {/* ANNOUNCEMENTS */}
+              {activeTab === "announcements" && (
+                <div className="space-y-4">
+                  <form onSubmit={handleAnnouncement} className="rounded-lg border border-border/60 p-4 space-y-3">
+                    <h4 className="text-sm font-semibold">New Announcement</h4>
+                    <Input placeholder="Title" value={annTitle} onChange={(e) => setAnnTitle(e.target.value)} required />
+                    <Textarea placeholder="Content..." value={annContent} onChange={(e) => setAnnContent(e.target.value)} rows={3} required />
+                    <div className="flex items-center gap-3">
+                      <Select value={annPriority} onValueChange={setAnnPriority}><SelectTrigger className="w-[130px]"><SelectValue /></SelectTrigger>
+                        <SelectContent><SelectItem value="normal">Normal</SelectItem><SelectItem value="important">Important</SelectItem><SelectItem value="urgent">Urgent</SelectItem></SelectContent></Select>
+                      <Button type="submit" size="sm" disabled={!annTitle || !annContent || isProcessing} className="gap-1.5"><Megaphone className="size-3.5" />Post</Button>
+                    </div></form>
+                  <Separator />
+                  <div className="space-y-2">{(announcements || []).map((ann) => (
+                    <div key={ann._id} className={`rounded-lg border p-4 ${ann.priority === "urgent" ? "border-red-500/30 bg-red-500/5" : ann.priority === "important" ? "border-amber-500/30 bg-amber-500/5" : "border-border/60"}`}>
+                      <div className="flex items-center justify-between"><div><p className="text-sm font-medium">{ann.title}</p><p className="text-xs text-muted-foreground mt-1">{ann.content}</p></div>
+                        <Button size="sm" variant="ghost" className="text-destructive text-xs" onClick={async () => { await deleteAnnouncement({ announcementId: ann._id }); toast.success("Deleted"); }}>Delete</Button></div>
+                      <p className="text-[10px] text-muted-foreground mt-2">{formatDate(ann.createdAt)} · {ann.authorName} · {ann.priority}</p>
+                    </div>))}</div>
+                </div>
+              )}
+
+              {/* REPORTS */}
+              {activeTab === "reports" && monthlyReport && (
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div><h3 className="font-semibold">Monthly Report</h3><p className="text-sm text-muted-foreground">{monthlyReport.period}</p></div>
+                    <Button size="sm" variant="outline" className="gap-1.5" disabled={isProcessing} onClick={handleAutoEscalate}><AlertTriangle className="size-3.5" />Auto-Escalate</Button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                    {[
+                      { label: "Filed", value: monthlyReport.totalFiled, color: "text-primary" },
+                      { label: "Resolved", value: monthlyReport.totalResolved, color: "text-emerald-400" },
+                      { label: "Escalated", value: monthlyReport.totalEscalated, color: "text-red-400" },
+                      { label: "Resolution Rate", value: `${monthlyReport.resolutionRate}%`, color: "text-blue-400" },
+                    ].map((s) => (<Card key={s.label} className="border-border/60"><CardContent className="p-4"><p className="text-sm text-muted-foreground">{s.label}</p><p className={`text-2xl font-bold mt-1 ${s.color}`}>{s.value}</p></CardContent></Card>))}
+                  </div>
+                  {monthlyReport.byDepartment.length > 0 && (
+                    <Card className="border-border/60"><CardHeader><CardTitle className="text-sm font-semibold">By Department</CardTitle></CardHeader>
+                      <CardContent><div className="space-y-2">{monthlyReport.byDepartment.map((d) => (
+                        <div key={d.name} className="flex items-center justify-between rounded-lg border border-border/60 p-3">
+                          <span className="text-sm font-medium">{d.name}</span>
+                          <div className="flex items-center gap-3 text-xs"><span>{d.total} filed</span><span className="text-emerald-400">{d.resolved} resolved</span><span className="text-red-400">{d.escalated} escalated</span></div>
+                        </div>))}</div></CardContent></Card>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ==================== FACULTY VIEW (Impersonated) ==================== */}
+          {viewMode === "faculty" && impersonatedFaculty && (
+            <div className="space-y-4">
+              {!impersonatedDeptId ? (
+                <div className="text-center py-12 text-muted-foreground"><Building2 className="mx-auto size-10 mb-3 opacity-50" /><p>This faculty member has no department assigned</p></div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                    {[
+                      { label: "Department Total", value: impersonatedDeptComplaints?.length || 0, icon: FileText, color: "text-primary" },
+                      { label: "Open", value: (impersonatedDeptComplaints || []).filter((c) => c.status !== "resolved" && c.status !== "rejected").length, icon: Clock, color: "text-amber-400" },
+                      { label: "Resolved", value: (impersonatedDeptComplaints || []).filter((c) => c.status === "resolved").length, icon: CheckCircle2, color: "text-emerald-400" },
+                      { label: "My Assignments", value: impersonatedAssigned?.length || 0, icon: Users, color: "text-blue-400" },
+                    ].map((s) => (<Card key={s.label} className="border-border/60"><CardContent className="p-4">
+                      <div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">{s.label}</p><p className="text-2xl font-bold mt-1">{s.value}</p></div>
+                        <div className={`flex size-10 items-center justify-center rounded-lg bg-muted ${s.color}`}><s.icon className="size-5" /></div></div>
+                    </CardContent></Card>))}
+                  </div>
+
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                    <div className="relative flex-1 max-w-sm"><Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                      <Input placeholder="Search..." value={facSearch} onChange={(e) => setFacSearch(e.target.value)} className="pl-9" /></div>
+                    <div className="flex items-center gap-2">
+                      <Select value={facFilterStatus} onValueChange={setFacFilterStatus}><SelectTrigger className="w-[130px]"><SelectValue /></SelectTrigger>
+                        <SelectContent><SelectItem value="all">All Status</SelectItem>{Object.entries(STATUS_CONFIG).map(([k, v]) => (<SelectItem key={k} value={k}>{v.label}</SelectItem>))}</SelectContent></Select>
+                      <Select value={facFilterCategory} onValueChange={setFacFilterCategory}><SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
+                        <SelectContent><SelectItem value="all">All Categories</SelectItem>{Object.entries(CATEGORIES).map(([k, v]) => (<SelectItem key={k} value={k}>{v.label}</SelectItem>))}</SelectContent></Select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">{facFiltered.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-border/60 bg-muted/30 py-12 text-center"><FileText className="mx-auto size-10 text-muted-foreground/40 mb-3" /><p className="text-sm font-medium text-muted-foreground">No complaints found</p></div>
+                  ) : facFiltered.map((c) => {
+                    const cat = CATEGORIES[c.category] || CATEGORIES.other; const st = STATUS_CONFIG[c.status] || STATUS_CONFIG.pending;
+                    return (<Card key={c._id} className="border-border/60 cursor-pointer hover:border-primary/30 transition-all" onClick={() => setSelectedComplaint(c._id)}>
+                      <CardContent className="p-4"><div className="flex items-center justify-between gap-3"><div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <Badge variant="secondary" className={`${cat.color} border text-[10px]`}>{<cat.icon className="size-2.5 mr-1" />}{cat.label}</Badge>
+                          <Badge variant="secondary" className={`${st.color} border text-[10px]`}>{<st.icon className="size-2.5 mr-1" />}{st.label}</Badge>
+                          {c.assignedToName && <Badge variant="secondary" className="text-[10px]">→ {c.assignedToName}</Badge>}
+                        </div><p className="text-sm font-medium truncate">{c.title}</p>
+                        <p className="text-xs text-muted-foreground">{c.userName} · {formatDate(c.createdAt)}</p>
+                      </div><ChevronRight className="size-4 text-muted-foreground/50 shrink-0" /></div></CardContent></Card>);
+                  })}</div>
+                </>
+              )}
             </div>
           )}
 
-          {/* REPORTS */}
-          {activeTab === "reports" && monthlyReport && (
+          {/* ==================== STUDENT VIEW (Preview) ==================== */}
+          {viewMode === "student" && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div><h3 className="font-semibold">Monthly Grievance Report</h3><p className="text-sm text-muted-foreground">{monthlyReport.period}</p></div>
-                <Button size="sm" variant="outline" className="gap-1.5" disabled={isProcessing} onClick={handleAutoEscalate}><AlertTriangle className="size-3.5" />Run Auto-Escalation</Button>
+              <div className="rounded-2xl border border-dashed border-border/60 bg-muted/30 py-16 text-center">
+                <Users className="mx-auto size-12 text-muted-foreground/40 mb-4" />
+                <h3 className="text-lg font-semibold">Student Dashboard Preview</h3>
+                <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
+                  This is how students experience SpeakUp Campus. They can submit complaints, track status, and comment on their grievances.
+                </p>
+                <Button variant="outline" className="mt-4 gap-2" onClick={() => navigate("/dashboard")}><Eye className="size-4" />Open Full Student Dashboard</Button>
               </div>
-
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-                {[
-                  { label: "Filed", value: monthlyReport.totalFiled, color: "text-primary" },
-                  { label: "Resolved", value: monthlyReport.totalResolved, color: "text-emerald-400" },
-                  { label: "Escalated", value: monthlyReport.totalEscalated, color: "text-red-400" },
-                  { label: "Resolution Rate", value: `${monthlyReport.resolutionRate}%`, color: "text-blue-400" },
-                ].map((s) => (<Card key={s.label} className="border-border/60"><CardContent className="p-4"><p className="text-sm text-muted-foreground">{s.label}</p><p className={`text-2xl font-bold mt-1 ${s.color}`}>{s.value}</p></CardContent></Card>))}
-              </div>
-
-              {monthlyReport.byDepartment.length > 0 && (
-                <Card className="border-border/60"><CardHeader><CardTitle className="text-sm font-semibold">By Department</CardTitle></CardHeader>
-                  <CardContent><div className="space-y-2">{monthlyReport.byDepartment.map((d) => (
-                    <div key={d.name} className="flex items-center justify-between rounded-lg border border-border/60 p-3">
-                      <span className="text-sm font-medium">{d.name}</span>
-                      <div className="flex items-center gap-3 text-xs"><span>{d.total} filed</span><span className="text-emerald-400">{d.resolved} resolved</span><span className="text-red-400">{d.escalated} escalated</span></div>
-                    </div>))}</div></CardContent></Card>
-              )}
-
-              {Object.keys(monthlyReport.byCategory).length > 0 && (
-                <Card className="border-border/60"><CardHeader><CardTitle className="text-sm font-semibold">By Category</CardTitle></CardHeader>
-                  <CardContent><div className="flex flex-wrap gap-3">{Object.entries(monthlyReport.byCategory).map(([cat, count]) => {
-                    const info = CATEGORIES[cat] || CATEGORIES.other;
-                    return (<Badge key={cat} variant="secondary" className={`${info.color} border text-xs`}>{<info.icon className="size-3 mr-1" />}{info.label}: {count}</Badge>);
-                  })}</div></CardContent></Card>
-              )}
             </div>
           )}
         </div>
       </main>
 
-      {/* Complaint Action Dialog */}
-      <Dialog open={!!selectedComplaint} onOpenChange={(open) => { if (!open) setSelectedComplaint(null); }}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      {/* ==================== COMPLAINT DETAIL DIALOG ==================== */}
+      <Dialog open={!!selectedComplaint} onOpenChange={(open) => { if (!open) { setSelectedComplaint(null); setResolveText(""); setCommentText(""); } }}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           {selectedData ? (<>
-            <DialogHeader><DialogTitle className="text-xl">{selectedData.title}</DialogTitle>
-              <DialogDescription>By {selectedData.userName} · {formatDate(selectedData.createdAt)}</DialogDescription></DialogHeader>
+            <DialogHeader>
+              <div className="flex items-center gap-2 mb-2">
+                <Badge variant="secondary" className={`${(CATEGORIES[selectedData.category] || CATEGORIES.other).color} border text-xs font-medium`}>{(CATEGORIES[selectedData.category] || CATEGORIES.other).label}</Badge>
+                <Badge variant="secondary" className={`${(STATUS_CONFIG[selectedData.status] || STATUS_CONFIG.pending).color} border text-xs font-medium`}>{(STATUS_CONFIG[selectedData.status] || STATUS_CONFIG.pending).label}</Badge>
+                {selectedData.isAnonymous && <Badge variant="secondary" className="bg-slate-500/10 text-slate-400 text-[10px]">Anonymous</Badge>}
+              </div>
+              <DialogTitle className="text-xl">{selectedData.title}</DialogTitle>
+              <DialogDescription>By {selectedData.userName} · {formatDate(selectedData.createdAt)}</DialogDescription>
+            </DialogHeader>
             <div className="space-y-4 mt-2">
               <p className="text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground">{selectedData.description}</p><Separator />
+
               <div><Label className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">Update Status</Label>
                 <div className="flex flex-wrap gap-2">{Object.entries(STATUS_CONFIG).map(([key, val]) => (
                   <Button key={key} variant={selectedData.status === key ? "default" : "outline"} size="sm" className="gap-1.5" disabled={isProcessing || selectedData.status === key}
                     onClick={() => handleStatusUpdate(selectedData._id, key)}>{<val.icon className="size-3" />}{val.label}</Button>
                 ))}</div></div><Separator />
+
               <div><Label className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">Assign To</Label>
                 <div className="flex gap-2">
                   <Select value={assignTo} onValueChange={setAssignTo}><SelectTrigger className="flex-1"><SelectValue placeholder="Select faculty / staff" /></SelectTrigger>
@@ -450,10 +624,40 @@ export default function Admin() {
                       <SelectItem key={u._id} value={u._id}>{u.name || u.email} ({u.role})</SelectItem>))}</SelectContent></Select>
                   <Button size="sm" disabled={!assignTo || isProcessing} onClick={handleAssign} className="gap-1.5"><UserPlus className="size-3.5" />Assign</Button>
                 </div></div><Separator />
+
               <div><Label className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">Resolution Notes</Label>
                 <Textarea placeholder="How this grievance was resolved..." value={resolveText} onChange={(e) => setResolveText(e.target.value)} rows={3} />
                 <Button className="mt-2 gap-1.5" disabled={!resolveText.trim() || isProcessing} onClick={handleResolve}>
                   {isProcessing ? <Loader2 className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />}Mark as Resolved</Button></div>
+
+              {selectedData.resolution && (<><Separator />
+                <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3"><Label className="text-xs text-emerald-400 uppercase tracking-wider">Resolution</Label><p className="text-sm mt-1 whitespace-pre-wrap">{selectedData.resolution}</p></div></>)}
+
+              {resolutionLogs && resolutionLogs.length > 0 && (<><Separator />
+                <div><Label className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">Timeline</Label>
+                  <div className="space-y-2 max-h-32 overflow-y-auto">{resolutionLogs.map((log) => (
+                    <div key={log._id} className="text-xs flex items-center justify-between border border-border/60 rounded-lg p-2">
+                      <span className="font-medium">{log.updatedByName}</span>
+                      <span className="text-muted-foreground">{log.previousStatus || "—"} → {log.newStatus}</span>
+                      <span className="text-muted-foreground">{formatDate(log.createdAt)}</span>
+                    </div>))}</div></div></>)}
+
+              <Separator />
+              <div><Label className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block flex items-center gap-1.5"><MessageCircle className="size-3" />Discussion ({complaintComments.length})</Label>
+                <div className="space-y-2 mb-3 max-h-48 overflow-y-auto">
+                  {complaintComments.length > 0 ? complaintComments.map((comment) => (
+                    <div key={comment._id} className="rounded-lg border border-border/60 bg-card p-3">
+                      <div className="flex items-center justify-between mb-1"><div className="flex items-center gap-2"><span className="text-xs font-medium">{comment.userName}</span>
+                        {comment.userRole === "faculty" && <Badge variant="secondary" className="bg-amber-500/10 text-amber-400 text-[9px]">Faculty</Badge>}
+                        {comment.userRole === "admin" && <Badge variant="secondary" className="bg-primary/10 text-primary text-[9px]">Admin</Badge>}</div>
+                        <span className="text-[10px] text-muted-foreground">{formatDate(comment.createdAt)}</span></div>
+                      <p className="text-xs text-muted-foreground">{comment.content}</p></div>
+                  )) : <p className="text-xs text-muted-foreground text-center py-3 border border-dashed border-border/60 rounded-lg">No comments yet.</p>}
+                </div>
+                <form onSubmit={handleComment} className="flex gap-2">
+                  <Input placeholder="Write a comment..." value={commentText} onChange={(e) => setCommentText(e.target.value)} className="flex-1" />
+                  <Button type="submit" size="icon" disabled={!commentText.trim() || isProcessing}>{isProcessing ? <Loader2 className="size-4 animate-spin" /> : <MessageCircle className="size-4" />}</Button>
+                </form></div>
             </div>
           </>) : <div className="flex items-center justify-center py-12"><Loader2 className="size-6 animate-spin" /></div>}
         </DialogContent>
